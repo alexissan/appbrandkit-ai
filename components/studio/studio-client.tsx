@@ -428,9 +428,9 @@ async function renderAsoFrame(
 
   const textX = safeX + safeW * 0.08;
   const textY = safeY + safeH * 0.12;
-  const headlineSize = options.device === "iphone" ? 110 : 118;
-  const subtextSize = options.device === "iphone" ? 46 : 48;
-  const frameWidth = safeW * 0.82;
+  const headlineSize = options.device === "iphone" ? 102 : 112;
+  const subtextSize = options.device === "iphone" ? 42 : 46;
+  const frameWidth = safeW * 0.8;
 
   context.fillStyle = theme.accent;
   context.beginPath();
@@ -441,22 +441,45 @@ async function renderAsoFrame(
   context.font = "700 28px sans-serif";
   context.fillText(frameBadgeLabel(options.frame), textX + 24, safeY + safeH * 0.05 + 38);
 
+  context.fillStyle = "rgba(255,255,255,0.22)";
+  context.beginPath();
+  context.roundRect(textX, textY - 58, safeW * 0.42, 58, 28);
+  context.fill();
+
   context.fillStyle = theme.body;
   context.font = "600 30px sans-serif";
-  context.fillText(theme.eyebrow, textX, textY);
+  context.fillText(`${appName} • ${theme.eyebrow}`, textX + 20, textY - 22);
 
   context.fillStyle = theme.title;
   context.font = `700 ${headlineSize}px sans-serif`;
-  wrapText(context, options.frame.headline, textX, textY + 120, frameWidth, headlineSize * 0.95, 2);
+  wrapText(context, options.frame.headline, textX, textY + 96, frameWidth, headlineSize * 0.94, 2);
 
   context.font = `500 ${subtextSize}px sans-serif`;
   context.fillStyle = theme.body;
-  wrapText(context, options.frame.subtext, textX, textY + 300, frameWidth, subtextSize * 1.25, 3);
+  wrapText(context, options.frame.subtext, textX, textY + 270, frameWidth, subtextSize * 1.25, 3);
+
+  const chips = [
+    parseFeatures(options.form.features)[0] ?? "Fast setup",
+    parseFeatures(options.form.features)[1] ?? "Clear hierarchy",
+    parseFeatures(options.form.features)[2] ?? "Export-ready"
+  ];
+
+  chips.forEach((chip, index) => {
+    const chipX = textX + index * (safeW * 0.24);
+    const chipY = textY + 435;
+    context.fillStyle = "rgba(255,255,255,0.2)";
+    context.beginPath();
+    context.roundRect(chipX, chipY, safeW * 0.22, 48, 24);
+    context.fill();
+    context.fillStyle = theme.title;
+    context.font = "600 22px sans-serif";
+    wrapText(context, chip, chipX + 18, chipY + 30, safeW * 0.18, 22, 1);
+  });
 
   const stageX = safeX + safeW * 0.08;
-  const stageY = safeY + safeH * 0.42;
+  const stageY = safeY + safeH * 0.5;
   const stageW = safeW * 0.84;
-  const stageH = safeH * 0.47;
+  const stageH = safeH * 0.39;
 
   context.fillStyle = "rgba(15,23,42,0.14)";
   context.beginPath();
@@ -639,29 +662,37 @@ export function StudioClient() {
   };
 
   return (
-    <div className="shell flex flex-col gap-8 py-10">
-      <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div className="max-w-2xl">
-          <div className="pill mb-4 text-sm font-medium">AppBrandKit AI Studio</div>
-          <h1 className="section-title max-w-3xl">Generate a launch-ready app brand kit with your own key.</h1>
-          <p className="mt-4 max-w-2xl text-base text-[color:var(--muted)] md:text-lg">
-            Create icon concepts, palette direction, ASO copy hooks, and App Store style screenshot mockups
-            for iPhone and iPad without storing platform keys on this app.
-          </p>
+    <div className="shell flex flex-col gap-8 py-10 md:gap-10">
+      <header className="glass rounded-[34px] p-6 md:p-8">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div className="max-w-3xl">
+            <div className="pill mb-4 text-sm font-medium">AppBrandKit AI Studio</div>
+            <h1 className="section-title max-w-3xl">Template-first screenshot and icon studio for faster App Store positioning.</h1>
+            <p className="mt-4 max-w-2xl text-base text-[color:var(--muted)] md:text-lg">
+              Generate premium concept directions with your own provider key. Keep your BYOK setup,
+              control costs, and export iPhone/iPad visuals in one flow.
+            </p>
+          </div>
+          <Link href="/" className="btn-ghost text-center">
+            Back to landing
+          </Link>
         </div>
-        <Link href="/" className="rounded-full border border-[color:var(--line)] bg-white px-5 py-3 text-sm font-medium">
-          Back to landing
-        </Link>
       </header>
 
-      <section className="glass rounded-[28px] p-6 md:p-8">
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
+      <section className="glass rounded-[30px] p-6 md:p-8">
+        <div className="mb-5 flex items-end justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold">Start from a proven prompt base</p>
+            <p className="mt-1 text-sm text-[color:var(--muted)]">Load one and customize fields before generation.</p>
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
           {starterPrompts.map((starter) => (
-            <article key={starter.title} className="rounded-3xl bg-white p-4">
+            <article key={starter.title} className="surface rounded-3xl p-4">
               <p className="text-sm font-semibold">{starter.title}</p>
               <p className="mt-2 text-sm leading-6 text-[color:var(--muted)]">{starter.prompt}</p>
               <button
-                className="mt-4 rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-medium"
+                className="btn-ghost mt-4 px-4 py-2"
                 onClick={() =>
                   setForm((current) => ({
                     ...current,
@@ -682,24 +713,30 @@ export function StudioClient() {
         </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="glass rounded-[28px] p-6 md:p-8">
-          <div className="grid gap-4">
+      <section className="grid gap-6 lg:grid-cols-[1.25fr_0.75fr]">
+        <div className="glass rounded-[30px] p-6 md:p-8">
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="text-xl font-semibold tracking-tight">Project brief</h2>
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--muted)]">Step 1</span>
+          </div>
+
+          <div className="grid gap-5">
             <label className="grid gap-2">
               <span className="text-sm font-medium">App idea prompt</span>
               <textarea
-                className="min-h-32 rounded-3xl border border-[color:var(--line)] bg-white px-4 py-3 outline-none"
+                className="input-shell min-h-36 rounded-3xl"
                 placeholder="Example: An AI meal planner for busy parents that builds weekly shopping lists from dietary goals."
                 value={form.prompt}
                 onChange={(event) => setForm((current) => ({ ...current, prompt: event.target.value }))}
               />
+              <span className="text-xs text-[color:var(--muted)]">Tip: include audience + outcome for stronger ASO frames.</span>
             </label>
 
             <div className="grid gap-4 md:grid-cols-2">
               <label className="grid gap-2">
                 <span className="text-sm font-medium">App name</span>
                 <input
-                  className="rounded-full border border-[color:var(--line)] bg-white px-4 py-3 outline-none"
+                  className="input-shell rounded-full"
                   placeholder="Optional"
                   value={form.appName}
                   onChange={(event) => setForm((current) => ({ ...current, appName: event.target.value }))}
@@ -708,7 +745,7 @@ export function StudioClient() {
               <label className="grid gap-2">
                 <span className="text-sm font-medium">Tagline</span>
                 <input
-                  className="rounded-full border border-[color:var(--line)] bg-white px-4 py-3 outline-none"
+                  className="input-shell rounded-full"
                   placeholder="Optional"
                   value={form.tagline}
                   onChange={(event) => setForm((current) => ({ ...current, tagline: event.target.value }))}
@@ -720,7 +757,7 @@ export function StudioClient() {
               <label className="grid gap-2">
                 <span className="text-sm font-medium">Target audience</span>
                 <input
-                  className="rounded-full border border-[color:var(--line)] bg-white px-4 py-3 outline-none"
+                  className="input-shell rounded-full"
                   placeholder="Example: Busy parents"
                   value={form.targetAudience}
                   onChange={(event) => setForm((current) => ({ ...current, targetAudience: event.target.value }))}
@@ -729,7 +766,7 @@ export function StudioClient() {
               <label className="grid gap-2">
                 <span className="text-sm font-medium">Value proposition</span>
                 <input
-                  className="rounded-full border border-[color:var(--line)] bg-white px-4 py-3 outline-none"
+                  className="input-shell rounded-full"
                   placeholder="Example: Plan meals in minutes with less waste"
                   value={form.valueProposition}
                   onChange={(event) => setForm((current) => ({ ...current, valueProposition: event.target.value }))}
@@ -738,84 +775,91 @@ export function StudioClient() {
             </div>
 
             <label className="grid gap-2">
-              <span className="text-sm font-medium">Features</span>
+              <span className="text-sm font-medium">Feature list</span>
               <textarea
-                className="min-h-28 rounded-3xl border border-[color:var(--line)] bg-white px-4 py-3 outline-none"
-                placeholder="Optional. Separate with commas or new lines."
+                className="input-shell min-h-28 rounded-3xl"
+                placeholder="Separate with commas or new lines."
                 value={form.features}
                 onChange={(event) => setForm((current) => ({ ...current, features: event.target.value }))}
               />
             </label>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <label className="grid gap-2">
-                <span className="text-sm font-medium">Icon style preset</span>
-                <select
-                  className="rounded-full border border-[color:var(--line)] bg-white px-4 py-3 outline-none"
-                  value={form.iconStyle}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, iconStyle: event.target.value as IconStylePreset }))
-                  }
-                >
-                  {Object.entries(iconStyleLabels).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            <div className="surface rounded-3xl p-4">
+              <p className="text-sm font-semibold">Template style controls</p>
+              <div className="mt-3 grid gap-3 md:grid-cols-3">
+                <label className="grid gap-2">
+                  <span className="text-sm font-medium">Icon style preset</span>
+                  <select
+                    className="input-shell rounded-full"
+                    value={form.iconStyle}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, iconStyle: event.target.value as IconStylePreset }))
+                    }
+                  >
+                    {Object.entries(iconStyleLabels).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-              <label className="grid gap-2">
-                <span className="text-sm font-medium">Screenshot tone</span>
-                <select
-                  className="rounded-full border border-[color:var(--line)] bg-white px-4 py-3 outline-none"
-                  value={form.screenshotTone}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, screenshotTone: event.target.value as ScreenshotTone }))
-                  }
-                >
-                  {Object.entries(screenshotToneLabels).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <label className="grid gap-2">
+                  <span className="text-sm font-medium">Screenshot tone</span>
+                  <select
+                    className="input-shell rounded-full"
+                    value={form.screenshotTone}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, screenshotTone: event.target.value as ScreenshotTone }))
+                    }
+                  >
+                    {Object.entries(screenshotToneLabels).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-              <label className="grid gap-2">
-                <span className="text-sm font-medium">Screenshot strategy</span>
-                <select
-                  className="rounded-full border border-[color:var(--line)] bg-white px-4 py-3 outline-none"
-                  value={form.screenshotStrategy}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      screenshotStrategy: event.target.value as ScreenshotStrategy
-                    }))
-                  }
-                >
-                  {Object.entries(screenshotStrategyLabels).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <label className="grid gap-2">
+                  <span className="text-sm font-medium">Screenshot strategy</span>
+                  <select
+                    className="input-shell rounded-full"
+                    value={form.screenshotStrategy}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        screenshotStrategy: event.target.value as ScreenshotStrategy
+                      }))
+                    }
+                  >
+                    {Object.entries(screenshotStrategyLabels).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
             </div>
           </div>
         </div>
 
-        <aside className="glass rounded-[28px] p-6 md:p-8">
-          <h2 className="text-xl font-semibold">BYOK provider</h2>
-          <p className="mt-2 text-sm text-[color:var(--muted)]">
-            If `OPENAI_API_KEY` is available on the server, it is preferred automatically. BYOK stays optional for local overrides.
+        <aside className="glass rounded-[30px] p-6 md:p-8">
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="text-xl font-semibold tracking-tight">Provider + safety</h2>
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--muted)]">Step 2</span>
+          </div>
+
+          <p className="text-sm text-[color:var(--muted)]">
+            If `OPENAI_API_KEY` exists server-side, it is used automatically. BYOK here remains optional for local overrides.
           </p>
 
           <div className="mt-5 grid gap-4">
             <label className="grid gap-2">
               <span className="text-sm font-medium">Provider</span>
               <select
-                className="rounded-full border border-[color:var(--line)] bg-white px-4 py-3 outline-none"
+                className="input-shell rounded-full"
                 value={provider}
                 onChange={(event) => setProvider(event.target.value as AIProvider)}
               >
@@ -830,7 +874,7 @@ export function StudioClient() {
             <label className="grid gap-2">
               <span className="text-sm font-medium">API key (optional)</span>
               <input
-                className="rounded-full border border-[color:var(--line)] bg-white px-4 py-3 outline-none"
+                className="input-shell rounded-full"
                 type="password"
                 placeholder="Used only if server key is missing"
                 value={apiKey}
@@ -839,18 +883,23 @@ export function StudioClient() {
             </label>
 
             <div className="rounded-3xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-              Legal and safety notice: review generated assets before shipping. Avoid trademarked logos, brand lookalikes, copyrighted characters, or misleading claims.
+              Legal notice: review generated outputs before shipping. Avoid trademarked logos, copyrighted characters,
+              brand lookalikes, or misleading performance claims.
             </div>
           </div>
         </aside>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-        <div className="glass rounded-[28px] p-6 md:p-8">
+      <section className="grid gap-6 lg:grid-cols-[0.92fr_1.08fr]">
+        <div className="glass rounded-[30px] p-6 md:p-8">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-semibold tracking-tight">Generate and refine</h2>
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--muted)]">Step 3</span>
+          </div>
+
           <div className="flex flex-wrap gap-3">
             <button
-              className="rounded-full bg-[color:var(--foreground)] px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
-              style={{ color: "#fff" }}
+              className="btn-primary disabled:opacity-50"
               disabled={!canGenerateIcon || isGeneratingIcon}
               onClick={handleGenerateIcon}
               type="button"
@@ -858,15 +907,15 @@ export function StudioClient() {
               {isGeneratingIcon ? "Generating icon..." : "Generate icon concept"}
             </button>
             <button
-              className="rounded-full border border-[color:var(--line)] bg-white px-5 py-3 text-sm font-semibold disabled:opacity-50"
+              className="btn-ghost disabled:opacity-50"
               disabled={!canGenerateScreenshots}
               onClick={handleGenerateMockups}
               type="button"
             >
-              Generate screenshots
+              Generate screenshot set
             </button>
             <button
-              className="rounded-full border border-[color:var(--line)] bg-white px-5 py-3 text-sm font-semibold disabled:opacity-50"
+              className="btn-ghost disabled:opacity-50"
               disabled={!iconSrc}
               onClick={handleExportIcons}
               type="button"
@@ -877,12 +926,12 @@ export function StudioClient() {
 
           {statusMessage ? <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm">{statusMessage}</p> : null}
 
-          <div className="mt-6 rounded-[28px] border border-dashed border-[color:var(--line)] bg-white/70 p-5">
+          <div className="mt-6 surface rounded-[26px] p-5">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-medium">Real UI screenshot inputs</p>
                 <p className="mt-1 text-sm text-[color:var(--muted)]">
-                  Upload multiple product screenshots to activate real-UI ASO mode. Without uploads, the generator falls back to concept mode.
+                  Upload real product screenshots to switch templates into real-UI mode.
                 </p>
               </div>
               <div className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] ${usingRealUi ? "bg-emerald-100 text-emerald-900" : "bg-slate-100 text-slate-700"}`}>
@@ -894,7 +943,7 @@ export function StudioClient() {
               <span className="text-sm font-medium">Upload screenshots</span>
               <input
                 accept="image/*"
-                className="rounded-3xl border border-[color:var(--line)] bg-white px-4 py-3"
+                className="input-shell rounded-2xl"
                 multiple
                 onChange={handleUploadScreenshots}
                 type="file"
@@ -913,7 +962,7 @@ export function StudioClient() {
                   ))}
                 </div>
                 <button
-                  className="mt-4 rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-medium"
+                  className="btn-ghost mt-4 px-4 py-2"
                   onClick={() => setUploadedScreenshots([])}
                   type="button"
                 >
@@ -922,19 +971,19 @@ export function StudioClient() {
               </>
             ) : (
               <p className="mt-4 text-sm text-[color:var(--muted)]">
-                No screenshots uploaded. The existing synthetic screenshot mode remains available as a fallback once an icon is generated.
+                No screenshots uploaded yet. You can still generate template previews after creating an icon.
               </p>
             )}
           </div>
 
-          <div className="mt-6 rounded-[28px] border border-dashed border-[color:var(--line)] bg-white/70 p-5">
+          <div className="mt-6 surface rounded-[26px] p-5">
             <p className="text-sm font-medium">Icon preview</p>
             {iconSrc ? (
               <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img alt="Generated app icon" className="h-52 w-52 rounded-[32px] border border-[color:var(--line)] object-cover shadow-sm" src={iconSrc} />
                 <button
-                  className="w-fit rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-medium"
+                  className="btn-ghost w-fit px-4 py-2"
                   onClick={() => {
                     const url = iconSrc.startsWith("data:") ? URL.createObjectURL(dataUrlToBlob(iconSrc)) : iconSrc;
                     downloadUrl(url, "appbrandkit-icon.png");
@@ -942,20 +991,20 @@ export function StudioClient() {
                   }}
                   type="button"
                 >
-                  Export PNG
+                  Export icon PNG
                 </button>
               </div>
             ) : (
-              <p className="mt-4 text-sm text-[color:var(--muted)]">Generated icon output appears here.</p>
+              <p className="mt-4 text-sm text-[color:var(--muted)]">No icon yet. Generate one to unlock fallback screenshot rendering.</p>
             )}
           </div>
         </div>
 
-        <div className="glass rounded-[28px] p-6 md:p-8">
+        <div className="glass rounded-[30px] p-6 md:p-8">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-xl font-semibold">Brand direction</h2>
-              <p className="mt-2 text-sm text-[color:var(--muted)]">Derived locally from your prompt and optional inputs.</p>
+              <h2 className="text-xl font-semibold tracking-tight">Template direction</h2>
+              <p className="mt-2 text-sm text-[color:var(--muted)]">Palette and ASO narrative are derived from your brief.</p>
             </div>
             <div className="rounded-full bg-white px-4 py-2 text-sm font-medium">{brand.palette.name}</div>
           </div>
@@ -971,13 +1020,13 @@ export function StudioClient() {
 
           <p className="mt-4 text-sm text-[color:var(--muted)]">{brand.palette.rationale}</p>
 
-          <div className="mt-8">
-            <h3 className="text-lg font-semibold">ASO copy narrative</h3>
+          <div className="mt-7">
+            <h3 className="text-lg font-semibold tracking-tight">ASO narrative flow (6 frames)</h3>
             <div className="mt-4 grid gap-3">
               {narrative.map((frame) => (
-                <article key={frame.id} className="rounded-3xl bg-white p-4">
+                <article key={frame.id} className="surface rounded-3xl p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--brand)]">{frame.label}</p>
-                  <p className="mt-2 text-lg font-semibold">{frame.headline}</p>
+                  <p className="mt-2 text-lg font-semibold tracking-tight">{frame.headline}</p>
                   <p className="mt-2 text-sm leading-6 text-[color:var(--muted)]">{frame.subtext}</p>
                 </article>
               ))}
@@ -986,12 +1035,12 @@ export function StudioClient() {
         </div>
       </section>
 
-      <section className="glass rounded-[28px] p-6 md:p-8">
+      <section className="glass rounded-[30px] p-6 md:p-8">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <h2 className="text-xl font-semibold">Screenshot listing preview</h2>
+            <h2 className="text-xl font-semibold tracking-tight">Screenshot output gallery</h2>
             <p className="mt-2 text-sm text-[color:var(--muted)]">
-              Six narrative frames rendered for both iPhone and iPad with App Store-safe copy hierarchy and export-ready PNGs.
+              Each run generates six narrative templates across iPhone and iPad. Export individual PNGs instantly.
             </p>
           </div>
           <div className="rounded-full bg-white px-4 py-2 text-sm">{mockups.length} assets generated</div>
@@ -1004,7 +1053,7 @@ export function StudioClient() {
                 {mockups
                   .filter((mockup) => mockup.device === "iphone")
                   .map((mockup) => (
-                    <div key={`strip-${mockup.id}`} className="w-40 shrink-0 rounded-2xl border border-[color:var(--line)] bg-white p-2">
+                    <div key={`strip-${mockup.id}`} className="surface w-40 shrink-0 rounded-2xl p-2">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img alt={mockup.title} className="aspect-[3/4] w-full rounded-xl object-cover" src={mockup.dataUrl} />
                     </div>
@@ -1014,7 +1063,7 @@ export function StudioClient() {
 
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               {mockups.map((mockup) => (
-                <article key={mockup.id} className="rounded-[28px] bg-white p-4">
+                <article key={mockup.id} className="surface rounded-[26px] p-4">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img alt={mockup.title} className="aspect-[3/4] w-full rounded-[20px] border border-[color:var(--line)] object-cover" src={mockup.dataUrl} />
                   <div className="mt-4 flex items-center justify-between gap-3">
@@ -1023,7 +1072,7 @@ export function StudioClient() {
                       <p className="text-xs uppercase tracking-[0.12em] text-[color:var(--muted)]">{mockup.device}</p>
                     </div>
                     <button
-                      className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-medium"
+                      className="btn-ghost px-4 py-2"
                       onClick={() => downloadUrl(mockup.dataUrl, `${mockup.id}.png`)}
                       type="button"
                     >
@@ -1035,9 +1084,12 @@ export function StudioClient() {
             </div>
           </>
         ) : (
-          <p className="mt-6 text-sm text-[color:var(--muted)]">
-            Upload screenshots for real-UI output, or generate an icon first to use the marked fallback mode.
-          </p>
+          <div className="mt-6 surface rounded-3xl p-5">
+            <p className="text-sm font-medium">No screenshots generated yet</p>
+            <p className="mt-2 text-sm text-[color:var(--muted)]">
+              Generate an icon, then run screenshot generation. Uploading real product UI will switch output to real-UI composition mode automatically.
+            </p>
+          </div>
         )}
       </section>
 

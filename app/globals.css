@@ -1,15 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f4efe5;
-  --foreground: #172033;
-  --muted: #62708d;
-  --card: rgba(255, 255, 255, 0.78);
-  --line: rgba(23, 32, 51, 0.1);
-  --brand: #0f766e;
-  --brand-strong: #14532d;
-  --accent: #f97316;
-  --sand: #fff7ed;
+  --background: #f2f5fb;
+  --foreground: #10182a;
+  --muted: #5e6a82;
+  --card: rgba(255, 255, 255, 0.76);
+  --card-strong: rgba(255, 255, 255, 0.94);
+  --line: rgba(16, 24, 42, 0.12);
+  --brand: #355cff;
+  --brand-strong: #1f3ccb;
+  --accent: #12b8a6;
+  --ink: #0b1220;
 }
 
 * {
@@ -24,13 +25,14 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    radial-gradient(circle at top left, rgba(249, 115, 22, 0.16), transparent 28%),
-    radial-gradient(circle at top right, rgba(15, 118, 110, 0.18), transparent 32%),
-    linear-gradient(180deg, #fffdf8 0%, var(--background) 100%);
+    radial-gradient(circle at 0% 0%, rgba(53, 92, 255, 0.22), transparent 32%),
+    radial-gradient(circle at 100% 8%, rgba(18, 184, 166, 0.2), transparent 30%),
+    linear-gradient(180deg, #fcfdff 0%, var(--background) 68%);
   color: var(--foreground);
   font-family:
     "Suisse Intl",
     "Avenir Next",
+    "Inter",
     "Segoe UI",
     sans-serif;
 }
@@ -55,16 +57,29 @@ select {
 
 .glass {
   background: var(--card);
-  backdrop-filter: blur(16px);
+  backdrop-filter: blur(18px);
   border: 1px solid var(--line);
-  box-shadow: 0 20px 70px rgba(23, 32, 51, 0.08);
+  box-shadow: 0 24px 70px rgba(16, 24, 42, 0.09);
+}
+
+.surface {
+  background: var(--card-strong);
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 34px rgba(16, 24, 42, 0.08);
 }
 
 .section-title {
-  font-size: clamp(1.9rem, 4vw, 3.4rem);
+  font-size: clamp(2rem, 4vw, 3.8rem);
   line-height: 0.95;
   letter-spacing: -0.04em;
   font-weight: 700;
+}
+
+.section-subtitle {
+  font-size: clamp(1.6rem, 3vw, 2.8rem);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+  font-weight: 650;
 }
 
 .pill {
@@ -72,10 +87,44 @@ select {
   align-items: center;
   gap: 8px;
   border-radius: 999px;
-  border: 1px solid rgba(15, 118, 110, 0.2);
-  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(53, 92, 255, 0.24);
+  background: rgba(255, 255, 255, 0.76);
   padding: 8px 14px;
   color: var(--brand-strong);
+}
+
+.input-shell {
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 11px 14px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.input-shell:focus {
+  border-color: rgba(53, 92, 255, 0.45);
+}
+
+.btn-primary {
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-strong) 100%);
+  border: 1px solid rgba(53, 92, 255, 0.48);
+  color: white;
+  padding: 12px 18px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  box-shadow: 0 12px 28px rgba(53, 92, 255, 0.28);
+}
+
+.btn-ghost {
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--foreground);
+  padding: 12px 18px;
+  font-size: 0.92rem;
+  font-weight: 650;
 }
 
 .grid-auto {
