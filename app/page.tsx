@@ -91,7 +91,7 @@ export default function HomePage() {
                 Generate my brand kit
               </Link>
               <a
-                className="rounded-full border border-[color:var(--line)] bg-white px-6 py-3 text-sm font-semibold"
+                className="rounded-full border border-[color:var(--line)] bg-white px-6 py-3 text-sm font-semibold text-[color:var(--foreground)]"
                 href="#how-it-works"
               >
                 See how it works
@@ -132,7 +132,7 @@ export default function HomePage() {
             <div className="pill text-sm font-medium">How it works</div>
             <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-5xl">A simple 3-step workflow for launch teams.</h2>
           </div>
-          <Link className="rounded-full border border-[color:var(--line)] bg-white px-5 py-3 text-sm font-semibold" href="/studio">
+          <Link className="rounded-full border border-[color:var(--line)] bg-white px-5 py-3 text-sm font-semibold text-[color:var(--foreground)]" href="/studio">
             Start now
           </Link>
         </div>
@@ -154,7 +154,7 @@ export default function HomePage() {
             <div className="pill text-sm font-medium">Real Examples</div>
             <h2 className="mt-4 text-3xl font-semibold tracking-tight md:text-5xl">See sample concepts generated as local demo assets.</h2>
           </div>
-          <Link className="rounded-full border border-[color:var(--line)] bg-white px-5 py-3 text-sm font-semibold" href="/studio">
+          <Link className="rounded-full border border-[color:var(--line)] bg-white px-5 py-3 text-sm font-semibold text-[color:var(--foreground)]" href="/studio">
             Try your own prompt
           </Link>
         </div>
@@ -200,7 +200,7 @@ export default function HomePage() {
           <Link className="rounded-full bg-[color:var(--brand)] px-6 py-3 text-sm font-semibold text-white" href="/studio">
             Open Studio
           </Link>
-          <a className="rounded-full border border-[color:var(--line)] bg-white px-6 py-3 text-center text-sm font-semibold" href="#examples">
+          <a className="rounded-full border border-[color:var(--line)] bg-white px-6 py-3 text-center text-sm font-semibold text-[color:var(--foreground)]" href="#examples">
             Browse real examples
           </a>
         </div>
