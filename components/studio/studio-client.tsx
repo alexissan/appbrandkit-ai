@@ -850,6 +850,7 @@ export function StudioClient() {
           <div className="flex flex-wrap gap-3">
             <button
               className="rounded-full bg-[color:var(--foreground)] px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
+              style={{ color: "#fff" }}
               disabled={!canGenerateIcon || isGeneratingIcon}
               onClick={handleGenerateIcon}
               type="button"

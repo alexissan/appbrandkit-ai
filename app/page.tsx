@@ -67,6 +67,7 @@ export default function HomePage() {
             </a>
             <Link
               className="rounded-full bg-[color:var(--foreground)] px-5 py-3 text-sm font-semibold text-white"
+              style={{ color: "#fff" }}
               href="/studio"
             >
               Open Studio
@@ -86,6 +87,7 @@ export default function HomePage() {
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
                 className="rounded-full bg-[color:var(--foreground)] px-6 py-3 text-sm font-semibold text-white"
+                style={{ color: "#fff" }}
                 href="/studio"
               >
                 Generate my brand kit
@@ -197,7 +199,7 @@ export default function HomePage() {
           </p>
         </div>
         <div className="flex flex-col gap-3">
-          <Link className="rounded-full bg-[color:var(--brand)] px-6 py-3 text-sm font-semibold text-white" href="/studio">
+          <Link className="rounded-full bg-[color:var(--brand)] px-6 py-3 text-sm font-semibold text-white" style={{ color: "#fff" }} href="/studio">
             Open Studio
           </Link>
           <a className="rounded-full border border-[color:var(--line)] bg-white px-6 py-3 text-center text-sm font-semibold text-[color:var(--foreground)]" href="#examples">
