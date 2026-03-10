@@ -1,17 +1,38 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { generateAsoNarrative, parseFeatures } from "@/lib/aso";
 import { deriveBrandSuggestion } from "@/lib/branding";
 import { generateIconWithProvider } from "@/lib/providers";
 import type {
   AIProvider,
+  AsoFrame,
   IconStylePreset,
   MockupVariant,
   ProviderConfig,
+  ScreenshotStrategy,
   ScreenshotTone,
   StudioForm
 } from "@/lib/types";
+
+type UploadedScreenshot = {
+  id: string;
+  name: string;
+  dataUrl: string;
+};
+
+type StrategyTheme = {
+  backgroundA: string;
+  backgroundB: string;
+  shell: string;
+  shellStroke: string;
+  eyebrow: string;
+  title: string;
+  body: string;
+  accent: string;
+  glow: string;
+};
 
 const providerLabels: Record<AIProvider, string> = {
   openai: "OpenAI",
@@ -31,15 +52,24 @@ const screenshotToneLabels: Record<ScreenshotTone, string> = {
   premium: "Premium"
 };
 
+const screenshotStrategyLabels: Record<ScreenshotStrategy, string> = {
+  conversion: "Conversion",
+  premium: "Premium",
+  playful: "Playful"
+};
+
 const localStorageKey = "appbrandkit-byok";
 
 const defaultForm: StudioForm = {
   prompt: "",
   appName: "",
   tagline: "",
+  targetAudience: "",
+  valueProposition: "",
   features: "",
   iconStyle: "glassy",
-  screenshotTone: "vibrant"
+  screenshotTone: "vibrant",
+  screenshotStrategy: "conversion"
 };
 
 const starterPrompts = [
@@ -49,6 +79,8 @@ const starterPrompts = [
       "A marine weather app for sailors and kite surfers. It predicts safe launch windows, wave quality, and creates simple route confidence cards.",
     appName: "TidalFlow",
     tagline: "Sail and ride with confidence.",
+    targetAudience: "Sailors and kite surfers",
+    valueProposition: "See the safest launch windows before you leave shore",
     features: "Live marine conditions\nRoute confidence score\nSafety alerts"
   },
   {
@@ -57,6 +89,8 @@ const starterPrompts = [
       "An app for creators to plan short-form content with AI hooks, posting cadence, and weekly growth insights.",
     appName: "PulseBoard",
     tagline: "Grow with a repeatable publishing system.",
+    targetAudience: "Short-form creators",
+    valueProposition: "Turn content chaos into a clear weekly publishing plan",
     features: "Content sprint planner\nHook library\nWeekly performance recap"
   },
   {
@@ -65,31 +99,14 @@ const starterPrompts = [
       "A shared family organizer for groceries, school tasks, routines, and reminders with a calm, premium visual style.",
     appName: "NestNote",
     tagline: "Keep family life in sync.",
+    targetAudience: "Busy families",
+    valueProposition: "Keep household planning calm, shared, and visible",
     features: "Shared lists\nSmart reminders\nHome timeline"
   }
 ];
 
 const iphoneSize = { width: 1290, height: 2796 };
 const ipadSize = { width: 2064, height: 2752 };
-
-const screenshotTemplates = [
-  "hero-focus",
-  "feature-cards",
-  "split-editorial",
-  "device-frame",
-  "benefit-grid",
-  "closing-cta"
-] as const;
-
-type ScreenshotTemplate = (typeof screenshotTemplates)[number];
-
-function parseFeatures(features: string): string[] {
-  return features
-    .split(/\n|,/) 
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .slice(0, 4);
-}
 
 function dataUrlToBlob(dataUrl: string): Blob {
   const [header, base64] = dataUrl.split(",");
@@ -114,6 +131,25 @@ async function loadImage(src: string): Promise<HTMLImageElement> {
     image.onerror = reject;
     image.src = src;
   });
+}
+
+async function filesToDataUrls(files: FileList): Promise<UploadedScreenshot[]> {
+  const readers = Array.from(files).map(
+    (file, index) =>
+      new Promise<UploadedScreenshot>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () =>
+          resolve({
+            id: `${file.name}-${file.lastModified}-${index}`,
+            name: file.name,
+            dataUrl: typeof reader.result === "string" ? reader.result : ""
+          });
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      })
+  );
+
+  return Promise.all(readers);
 }
 
 function wrapText(
@@ -159,46 +195,192 @@ function toneColors(tone: ScreenshotTone, palette: string[]) {
 
   if (tone === "minimal") {
     return {
-      gradientA: "#f8fafc",
-      gradientB: "#e2e8f0",
-      card: "rgba(255,255,255,0.94)",
-      chip: "rgba(15,23,42,0.06)",
-      title: "#0f172a",
-      body: "#334155",
-      accent: primary
+      softA: "#f8fafc",
+      softB: "#e2e8f0",
+      overlay: "rgba(255,255,255,0.92)",
+      text: "#0f172a",
+      secondaryText: "#334155",
+      accent: primary,
+      stroke: "rgba(15,23,42,0.08)"
     };
   }
 
   if (tone === "premium") {
     return {
-      gradientA: "#0f172a",
-      gradientB: "#312e81",
-      card: "rgba(15,23,42,0.55)",
-      chip: "rgba(255,255,255,0.12)",
-      title: "#f8fafc",
-      body: "#cbd5e1",
-      accent: "#f59e0b"
+      softA: "#0f172a",
+      softB: "#312e81",
+      overlay: "rgba(15,23,42,0.72)",
+      text: "#f8fafc",
+      secondaryText: "#cbd5e1",
+      accent: "#f59e0b",
+      stroke: "rgba(255,255,255,0.12)"
     };
   }
 
   return {
-    gradientA: primary,
-    gradientB: secondary,
-    card: "rgba(255,255,255,0.18)",
-    chip: "rgba(255,255,255,0.2)",
-    title: "#ffffff",
-    body: surface,
-    accent: text
+    softA: primary,
+    softB: secondary,
+    overlay: "rgba(255,255,255,0.14)",
+    text: "#ffffff",
+    secondaryText: surface,
+    accent: text,
+    stroke: "rgba(255,255,255,0.12)"
   };
 }
 
-async function renderTemplate(
+function buildStrategyTheme(
+  strategy: ScreenshotStrategy,
+  tone: ScreenshotTone,
+  palette: string[]
+): StrategyTheme {
+  const colors = toneColors(tone, palette);
+
+  if (strategy === "premium") {
+    return {
+      backgroundA: colors.softA,
+      backgroundB: "#111827",
+      shell: colors.overlay,
+      shellStroke: colors.stroke,
+      eyebrow: "Luxury flow",
+      title: colors.text,
+      body: colors.secondaryText,
+      accent: "#f59e0b",
+      glow: "rgba(245,158,11,0.22)"
+    };
+  }
+
+  if (strategy === "playful") {
+    return {
+      backgroundA: palette[1] ?? "#60a5fa",
+      backgroundB: palette[0] ?? "#1d4ed8",
+      shell: "rgba(255,255,255,0.18)",
+      shellStroke: "rgba(255,255,255,0.18)",
+      eyebrow: "Joyful momentum",
+      title: "#ffffff",
+      body: "#dbeafe",
+      accent: palette[2] ?? "#f97316",
+      glow: "rgba(249,115,22,0.2)"
+    };
+  }
+
+  return {
+    backgroundA: colors.softA,
+    backgroundB: colors.softB,
+    shell: colors.overlay,
+    shellStroke: colors.stroke,
+    eyebrow: "Conversion narrative",
+    title: colors.text,
+    body: colors.secondaryText,
+    accent: palette[2] ?? "#f97316",
+    glow: "rgba(15,118,110,0.18)"
+  };
+}
+
+function frameBadgeLabel(frame: AsoFrame) {
+  switch (frame.id) {
+    case "value-promise":
+      return "VALUE";
+    case "feature-one":
+      return "FEATURE 1";
+    case "feature-two":
+      return "FEATURE 2";
+    case "trust":
+      return "TRUST";
+    case "outcome":
+      return "OUTCOME";
+    case "cta":
+      return "CTA";
+  }
+}
+
+function drawRoundedImage(
+  context: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+) {
+  context.save();
+  context.beginPath();
+  context.roundRect(x, y, width, height, radius);
+  context.clip();
+
+  const scale = Math.max(width / image.width, height / image.height);
+  const drawWidth = image.width * scale;
+  const drawHeight = image.height * scale;
+  const drawX = x + (width - drawWidth) / 2;
+  const drawY = y + (height - drawHeight) / 2;
+  context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+  context.restore();
+}
+
+function drawFallbackScreen(
+  context: CanvasRenderingContext2D,
+  options: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    radius: number;
+    theme: StrategyTheme;
+    icon: HTMLImageElement | null;
+    features: string[];
+  }
+) {
+  const { x, y, width, height, radius, theme, icon, features } = options;
+
+  context.save();
+  context.beginPath();
+  context.roundRect(x, y, width, height, radius);
+  context.clip();
+
+  const gradient = context.createLinearGradient(x, y, x + width, y + height);
+  gradient.addColorStop(0, "rgba(255,255,255,0.94)");
+  gradient.addColorStop(1, "rgba(255,255,255,0.72)");
+  context.fillStyle = gradient;
+  context.fillRect(x, y, width, height);
+
+  context.fillStyle = "rgba(15,23,42,0.06)";
+  context.beginPath();
+  context.roundRect(x + width * 0.07, y + height * 0.08, width * 0.86, height * 0.2, 28);
+  context.fill();
+
+  if (icon) {
+    const iconSize = Math.min(width * 0.24, 220);
+    context.drawImage(icon, x + width * 0.07, y + height * 0.14, iconSize, iconSize);
+  }
+
+  context.fillStyle = "#0f172a";
+  context.font = `700 ${Math.max(28, width * 0.048)}px sans-serif`;
+  context.fillText("Fallback concept mode", x + width * 0.07, y + height * 0.4);
+
+  context.font = `500 ${Math.max(20, width * 0.03)}px sans-serif`;
+  context.fillStyle = "#475569";
+  features.slice(0, 3).forEach((feature, index) => {
+    const top = y + height * 0.5 + index * (height * 0.12);
+    context.fillStyle = "rgba(15,23,42,0.07)";
+    context.beginPath();
+    context.roundRect(x + width * 0.07, top, width * 0.8, height * 0.085, 24);
+    context.fill();
+    context.fillStyle = "#334155";
+    context.fillText(feature, x + width * 0.11, top + height * 0.055);
+  });
+
+  context.strokeStyle = theme.shellStroke;
+  context.strokeRect(x + width * 0.68, y + height * 0.13, width * 0.18, height * 0.54);
+  context.restore();
+}
+
+async function renderAsoFrame(
   canvas: HTMLCanvasElement,
   options: {
     form: StudioForm;
-    iconSrc: string;
+    frame: AsoFrame;
+    iconSrc?: string;
     palette: string[];
-    template: ScreenshotTemplate;
+    screenshotSrc?: string;
     device: "iphone" | "ipad";
   }
 ) {
@@ -209,141 +391,115 @@ async function renderTemplate(
   const context = canvas.getContext("2d");
   if (!context) return;
 
-  const appName = options.form.appName.trim() || "Your App";
-  const tagline =
-    options.form.tagline.trim() || "Launch a polished experience from first glance.";
+  const theme = buildStrategyTheme(
+    options.form.screenshotStrategy,
+    options.form.screenshotTone,
+    options.palette
+  );
   const features = parseFeatures(options.form.features);
-  const tone = toneColors(options.form.screenshotTone, options.palette);
-
-  const icon = await loadImage(options.iconSrc);
+  const appName = options.form.appName.trim() || "Your App";
+  const screenshotImage = options.screenshotSrc ? await loadImage(options.screenshotSrc) : null;
+  const icon = options.iconSrc ? await loadImage(options.iconSrc) : null;
 
   context.clearRect(0, 0, canvas.width, canvas.height);
   const gradient = context.createLinearGradient(0, 0, canvas.width, canvas.height);
-  gradient.addColorStop(0, tone.gradientA);
-  gradient.addColorStop(1, tone.gradientB);
+  gradient.addColorStop(0, theme.backgroundA);
+  gradient.addColorStop(1, theme.backgroundB);
   context.fillStyle = gradient;
   context.fillRect(0, 0, canvas.width, canvas.height);
 
-  const safeX = canvas.width * 0.08;
-  const safeY = canvas.height * 0.08;
-  const safeW = canvas.width * 0.84;
-  const safeH = canvas.height * 0.84;
+  context.fillStyle = theme.glow;
+  context.beginPath();
+  context.ellipse(canvas.width * 0.8, canvas.height * 0.14, canvas.width * 0.18, canvas.height * 0.09, 0, 0, Math.PI * 2);
+  context.fill();
 
-  context.fillStyle = tone.card;
-  context.strokeStyle = "rgba(255,255,255,0.22)";
+  const safeX = canvas.width * 0.07;
+  const safeY = canvas.height * 0.055;
+  const safeW = canvas.width * 0.86;
+  const safeH = canvas.height * 0.89;
+
+  context.fillStyle = theme.shell;
+  context.strokeStyle = theme.shellStroke;
   context.lineWidth = 2;
   context.beginPath();
-  context.roundRect(safeX, safeY, safeW, safeH, 48);
+  context.roundRect(safeX, safeY, safeW, safeH, 56);
   context.fill();
   context.stroke();
 
-  const badgeSize = options.device === "iphone" ? 188 : 220;
-  context.drawImage(icon, safeX + 52, safeY + 50, badgeSize, badgeSize);
+  const textX = safeX + safeW * 0.08;
+  const textY = safeY + safeH * 0.12;
+  const headlineSize = options.device === "iphone" ? 110 : 118;
+  const subtextSize = options.device === "iphone" ? 46 : 48;
+  const frameWidth = safeW * 0.82;
 
-  context.fillStyle = tone.chip;
+  context.fillStyle = theme.accent;
   context.beginPath();
-  context.roundRect(safeX + 260, safeY + 88, safeW * 0.22, 66, 33);
+  context.roundRect(textX, safeY + safeH * 0.05, safeW * 0.24, 58, 29);
   context.fill();
-  context.fillStyle = tone.title;
-  context.font = "600 40px sans-serif";
-  context.fillText("App Store Ready", safeX + 292, safeY + 133);
 
-  const titleY = safeY + 350;
-  context.fillStyle = tone.title;
-  context.font = options.device === "iphone" ? "700 132px sans-serif" : "700 120px sans-serif";
-  wrapText(context, appName, safeX + 56, titleY, safeW * 0.72, 138, 2);
-  context.font = options.device === "iphone" ? "500 58px sans-serif" : "500 54px sans-serif";
-  context.fillStyle = tone.body;
-  wrapText(context, tagline, safeX + 56, titleY + 170, safeW * 0.7, 72, 3);
+  context.fillStyle = "#ffffff";
+  context.font = "700 28px sans-serif";
+  context.fillText(frameBadgeLabel(options.frame), textX + 24, safeY + safeH * 0.05 + 38);
 
-  const chipFeatures = features.length > 0 ? features : ["Fast setup", "High-converting visuals", "Launch confidence"];
+  context.fillStyle = theme.body;
+  context.font = "600 30px sans-serif";
+  context.fillText(theme.eyebrow, textX, textY);
 
-  if (options.template === "hero-focus") {
-    chipFeatures.slice(0, 3).forEach((feature, index) => {
-      const top = safeY + safeH - 320 + index * 92;
-      context.fillStyle = tone.chip;
-      context.beginPath();
-      context.roundRect(safeX + 56, top, safeW * 0.62, 72, 36);
-      context.fill();
-      context.fillStyle = tone.title;
-      context.font = "500 38px sans-serif";
-      context.fillText(feature, safeX + 84, top + 47);
+  context.fillStyle = theme.title;
+  context.font = `700 ${headlineSize}px sans-serif`;
+  wrapText(context, options.frame.headline, textX, textY + 120, frameWidth, headlineSize * 0.95, 2);
+
+  context.font = `500 ${subtextSize}px sans-serif`;
+  context.fillStyle = theme.body;
+  wrapText(context, options.frame.subtext, textX, textY + 300, frameWidth, subtextSize * 1.25, 3);
+
+  const stageX = safeX + safeW * 0.08;
+  const stageY = safeY + safeH * 0.42;
+  const stageW = safeW * 0.84;
+  const stageH = safeH * 0.47;
+
+  context.fillStyle = "rgba(15,23,42,0.14)";
+  context.beginPath();
+  context.roundRect(stageX, stageY + 24, stageW, stageH, 48);
+  context.fill();
+
+  context.fillStyle = "rgba(255,255,255,0.94)";
+  context.beginPath();
+  context.roundRect(stageX, stageY, stageW, stageH, 48);
+  context.fill();
+
+  if (screenshotImage) {
+    drawRoundedImage(context, screenshotImage, stageX + 24, stageY + 24, stageW - 48, stageH - 48, 32);
+  } else {
+    drawFallbackScreen(context, {
+      x: stageX + 24,
+      y: stageY + 24,
+      width: stageW - 48,
+      height: stageH - 48,
+      radius: 32,
+      theme,
+      icon,
+      features
     });
   }
 
-  if (options.template === "feature-cards") {
-    chipFeatures.slice(0, 3).forEach((feature, index) => {
-      const left = safeX + 56 + index * (safeW * 0.29);
-      const top = safeY + safeH - 420;
-      context.fillStyle = "rgba(255,255,255,0.22)";
-      context.beginPath();
-      context.roundRect(left, top, safeW * 0.26, 270, 34);
-      context.fill();
-      context.fillStyle = tone.accent;
-      context.font = "700 46px sans-serif";
-      context.fillText(`0${index + 1}`, left + 28, top + 68);
-      context.fillStyle = tone.title;
-      context.font = "500 38px sans-serif";
-      wrapText(context, feature, left + 28, top + 132, safeW * 0.2, 46, 3);
-    });
-  }
+  context.strokeStyle = "rgba(255,255,255,0.34)";
+  context.lineWidth = 2;
+  context.beginPath();
+  context.roundRect(stageX, stageY, stageW, stageH, 48);
+  context.stroke();
 
-  if (options.template === "split-editorial") {
-    context.fillStyle = "rgba(255,255,255,0.86)";
-    context.fillRect(safeX + safeW * 0.52, safeY + 30, safeW * 0.43, safeH - 60);
-    context.drawImage(icon, safeX + safeW * 0.62, safeY + 150, safeW * 0.22, safeW * 0.22);
-    context.fillStyle = "#0f172a";
-    context.font = "700 48px sans-serif";
-    context.fillText("Why users love it", safeX + safeW * 0.56, safeY + 500);
-    chipFeatures.slice(0, 3).forEach((feature, index) => {
-      context.font = "500 36px sans-serif";
-      context.fillText(`• ${feature}`, safeX + safeW * 0.56, safeY + 590 + index * 90);
-    });
-  }
+  context.fillStyle = "rgba(15,23,42,0.08)";
+  context.beginPath();
+  context.roundRect(stageX + 30, stageY + 26, stageW * 0.22, 52, 26);
+  context.fill();
+  context.fillStyle = "#0f172a";
+  context.font = "600 24px sans-serif";
+  context.fillText(screenshotImage ? "REAL UI MODE" : "FALLBACK MODE", stageX + 56, stageY + 60);
 
-  if (options.template === "device-frame") {
-    context.fillStyle = "rgba(15,23,42,0.22)";
-    context.beginPath();
-    context.roundRect(safeX + safeW * 0.57, safeY + 130, safeW * 0.34, safeH * 0.65, 64);
-    context.fill();
-    context.fillStyle = "rgba(255,255,255,0.95)";
-    context.beginPath();
-    context.roundRect(safeX + safeW * 0.6, safeY + 170, safeW * 0.28, safeH * 0.56, 52);
-    context.fill();
-    context.drawImage(icon, safeX + safeW * 0.655, safeY + 260, safeW * 0.16, safeW * 0.16);
-  }
-
-  if (options.template === "benefit-grid") {
-    const blocks = chipFeatures.slice(0, 4);
-    blocks.forEach((feature, index) => {
-      const col = index % 2;
-      const row = Math.floor(index / 2);
-      const cardW = safeW * 0.42;
-      const cardH = 180;
-      const left = safeX + 56 + col * (cardW + 30);
-      const top = safeY + safeH - 450 + row * (cardH + 24);
-      context.fillStyle = "rgba(255,255,255,0.2)";
-      context.beginPath();
-      context.roundRect(left, top, cardW, cardH, 28);
-      context.fill();
-      context.fillStyle = tone.title;
-      context.font = "600 40px sans-serif";
-      wrapText(context, feature, left + 26, top + 64, cardW - 40, 44, 2);
-    });
-  }
-
-  if (options.template === "closing-cta") {
-    context.fillStyle = "rgba(255,255,255,0.22)";
-    context.beginPath();
-    context.roundRect(safeX + 56, safeY + safeH - 340, safeW - 112, 230, 34);
-    context.fill();
-    context.fillStyle = tone.title;
-    context.font = "700 68px sans-serif";
-    context.fillText("Download now", safeX + 100, safeY + safeH - 230);
-    context.font = "500 42px sans-serif";
-    context.fillStyle = tone.body;
-    context.fillText("Built for speed, clarity, and launch-day trust.", safeX + 100, safeY + safeH - 160);
-  }
+  context.fillStyle = theme.title;
+  context.font = "600 30px sans-serif";
+  context.fillText(appName, safeX + safeW * 0.74, safeY + safeH * 0.08);
 }
 
 export function StudioClient() {
@@ -354,9 +510,12 @@ export function StudioClient() {
   const [statusMessage, setStatusMessage] = useState("");
   const [iconSrc, setIconSrc] = useState("");
   const [mockups, setMockups] = useState<MockupVariant[]>([]);
+  const [uploadedScreenshots, setUploadedScreenshots] = useState<UploadedScreenshot[]>([]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const brand = useMemo(() => deriveBrandSuggestion(form), [form]);
+  const narrative = useMemo(() => generateAsoNarrative(form), [form]);
+  const usingRealUi = uploadedScreenshots.length > 0;
 
   useEffect(() => {
     const raw = window.localStorage.getItem(localStorageKey);
@@ -376,10 +535,11 @@ export function StudioClient() {
     window.localStorage.setItem(localStorageKey, JSON.stringify(payload));
   }, [provider, apiKey]);
 
-  const canGenerate = form.prompt.trim().length > 0;
+  const canGenerateIcon = form.prompt.trim().length > 0;
+  const canGenerateScreenshots = usingRealUi || Boolean(iconSrc);
 
   const handleGenerateIcon = async () => {
-    if (!canGenerate) {
+    if (!canGenerateIcon) {
       setStatusMessage("Enter an app idea prompt first.");
       return;
     }
@@ -400,36 +560,58 @@ export function StudioClient() {
     }
   };
 
+  const handleUploadScreenshots = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    try {
+      const items = await filesToDataUrls(files);
+      setUploadedScreenshots(items);
+      setStatusMessage(`Loaded ${items.length} real app screenshots for ASO composition.`);
+    } catch {
+      setStatusMessage("Failed to read one or more screenshots.");
+    }
+  };
+
   const handleGenerateMockups = async () => {
-    if (!canvasRef.current || !iconSrc) {
-      setStatusMessage("Generate or provide an icon first.");
+    if (!canvasRef.current || !canGenerateScreenshots) {
+      setStatusMessage("Upload screenshots for real-UI mode, or generate an icon to use fallback mode.");
       return;
     }
 
     const variants: MockupVariant[] = [];
 
-    for (const template of screenshotTemplates) {
+    for (const [index, frame] of narrative.entries()) {
+      const source = uploadedScreenshots[index % Math.max(uploadedScreenshots.length, 1)]?.dataUrl;
+
       for (const device of ["iphone", "ipad"] as const) {
-        await renderTemplate(canvasRef.current, {
+        await renderAsoFrame(canvasRef.current, {
           form,
-          iconSrc,
+          frame,
+          iconSrc: iconSrc || undefined,
           palette: brand.palette.colors,
-          template,
+          screenshotSrc: source,
           device
         });
 
         variants.push({
-          id: `${template}-${device}`,
+          id: `${frame.id}-${device}`,
           device,
-          template,
-          title: `${template.replace("-", " ")} / ${device}`,
+          template: frame.id,
+          title: `${frame.label} / ${device}`,
           dataUrl: canvasRef.current.toDataURL("image/png")
         });
       }
     }
 
     setMockups(variants);
-    setStatusMessage("App Store-style screenshot mockups generated.");
+    setStatusMessage(
+      usingRealUi
+        ? "Generated 6-frame ASO screenshot story with your uploaded UI for iPhone and iPad."
+        : "Generated 6-frame ASO screenshot story in fallback mode using the icon concept."
+    );
   };
 
   const handleExportIcons = async () => {
@@ -463,7 +645,7 @@ export function StudioClient() {
           <div className="pill mb-4 text-sm font-medium">AppBrandKit AI Studio</div>
           <h1 className="section-title max-w-3xl">Generate a launch-ready app brand kit with your own key.</h1>
           <p className="mt-4 max-w-2xl text-base text-[color:var(--muted)] md:text-lg">
-            Create icon concepts, palette direction, copy hooks, and App Store style screenshot mockups
+            Create icon concepts, palette direction, ASO copy hooks, and App Store style screenshot mockups
             for iPhone and iPad without storing platform keys on this app.
           </p>
         </div>
@@ -486,6 +668,8 @@ export function StudioClient() {
                     prompt: starter.prompt,
                     appName: starter.appName,
                     tagline: starter.tagline,
+                    targetAudience: starter.targetAudience,
+                    valueProposition: starter.valueProposition,
                     features: starter.features
                   }))
                 }
@@ -532,6 +716,27 @@ export function StudioClient() {
               </label>
             </div>
 
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="grid gap-2">
+                <span className="text-sm font-medium">Target audience</span>
+                <input
+                  className="rounded-full border border-[color:var(--line)] bg-white px-4 py-3 outline-none"
+                  placeholder="Example: Busy parents"
+                  value={form.targetAudience}
+                  onChange={(event) => setForm((current) => ({ ...current, targetAudience: event.target.value }))}
+                />
+              </label>
+              <label className="grid gap-2">
+                <span className="text-sm font-medium">Value proposition</span>
+                <input
+                  className="rounded-full border border-[color:var(--line)] bg-white px-4 py-3 outline-none"
+                  placeholder="Example: Plan meals in minutes with less waste"
+                  value={form.valueProposition}
+                  onChange={(event) => setForm((current) => ({ ...current, valueProposition: event.target.value }))}
+                />
+              </label>
+            </div>
+
             <label className="grid gap-2">
               <span className="text-sm font-medium">Features</span>
               <textarea
@@ -542,7 +747,7 @@ export function StudioClient() {
               />
             </label>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-3">
               <label className="grid gap-2">
                 <span className="text-sm font-medium">Icon style preset</span>
                 <select
@@ -553,7 +758,9 @@ export function StudioClient() {
                   }
                 >
                   {Object.entries(iconStyleLabels).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
                   ))}
                 </select>
               </label>
@@ -568,7 +775,29 @@ export function StudioClient() {
                   }
                 >
                   {Object.entries(screenshotToneLabels).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="grid gap-2">
+                <span className="text-sm font-medium">Screenshot strategy</span>
+                <select
+                  className="rounded-full border border-[color:var(--line)] bg-white px-4 py-3 outline-none"
+                  value={form.screenshotStrategy}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      screenshotStrategy: event.target.value as ScreenshotStrategy
+                    }))
+                  }
+                >
+                  {Object.entries(screenshotStrategyLabels).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
                   ))}
                 </select>
               </label>
@@ -579,7 +808,7 @@ export function StudioClient() {
         <aside className="glass rounded-[28px] p-6 md:p-8">
           <h2 className="text-xl font-semibold">BYOK provider</h2>
           <p className="mt-2 text-sm text-[color:var(--muted)]">
-            If OPENAI_API_KEY is available on the server, it is preferred automatically. BYOK stays optional for local overrides.
+            If `OPENAI_API_KEY` is available on the server, it is preferred automatically. BYOK stays optional for local overrides.
           </p>
 
           <div className="mt-5 grid gap-4">
@@ -591,7 +820,9 @@ export function StudioClient() {
                 onChange={(event) => setProvider(event.target.value as AIProvider)}
               >
                 {Object.entries(providerLabels).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
                 ))}
               </select>
             </label>
@@ -617,18 +848,83 @@ export function StudioClient() {
       <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
         <div className="glass rounded-[28px] p-6 md:p-8">
           <div className="flex flex-wrap gap-3">
-            <button className="rounded-full bg-[color:var(--foreground)] px-5 py-3 text-sm font-semibold text-white disabled:opacity-50" disabled={!canGenerate || isGeneratingIcon} onClick={handleGenerateIcon} type="button">
+            <button
+              className="rounded-full bg-[color:var(--foreground)] px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
+              disabled={!canGenerateIcon || isGeneratingIcon}
+              onClick={handleGenerateIcon}
+              type="button"
+            >
               {isGeneratingIcon ? "Generating icon..." : "Generate icon concept"}
             </button>
-            <button className="rounded-full border border-[color:var(--line)] bg-white px-5 py-3 text-sm font-semibold disabled:opacity-50" disabled={!iconSrc} onClick={handleGenerateMockups} type="button">
+            <button
+              className="rounded-full border border-[color:var(--line)] bg-white px-5 py-3 text-sm font-semibold disabled:opacity-50"
+              disabled={!canGenerateScreenshots}
+              onClick={handleGenerateMockups}
+              type="button"
+            >
               Generate screenshots
             </button>
-            <button className="rounded-full border border-[color:var(--line)] bg-white px-5 py-3 text-sm font-semibold disabled:opacity-50" disabled={!iconSrc} onClick={handleExportIcons} type="button">
+            <button
+              className="rounded-full border border-[color:var(--line)] bg-white px-5 py-3 text-sm font-semibold disabled:opacity-50"
+              disabled={!iconSrc}
+              onClick={handleExportIcons}
+              type="button"
+            >
               Export iOS icon ZIP
             </button>
           </div>
 
           {statusMessage ? <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm">{statusMessage}</p> : null}
+
+          <div className="mt-6 rounded-[28px] border border-dashed border-[color:var(--line)] bg-white/70 p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium">Real UI screenshot inputs</p>
+                <p className="mt-1 text-sm text-[color:var(--muted)]">
+                  Upload multiple product screenshots to activate real-UI ASO mode. Without uploads, the generator falls back to concept mode.
+                </p>
+              </div>
+              <div className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] ${usingRealUi ? "bg-emerald-100 text-emerald-900" : "bg-slate-100 text-slate-700"}`}>
+                {usingRealUi ? "Real UI Mode" : "Fallback Mode"}
+              </div>
+            </div>
+
+            <label className="mt-4 grid gap-2">
+              <span className="text-sm font-medium">Upload screenshots</span>
+              <input
+                accept="image/*"
+                className="rounded-3xl border border-[color:var(--line)] bg-white px-4 py-3"
+                multiple
+                onChange={handleUploadScreenshots}
+                type="file"
+              />
+            </label>
+
+            {uploadedScreenshots.length > 0 ? (
+              <>
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  {uploadedScreenshots.map((item) => (
+                    <div key={item.id} className="rounded-3xl border border-[color:var(--line)] bg-white p-3">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img alt={item.name} className="aspect-[9/19] w-full rounded-2xl object-cover" src={item.dataUrl} />
+                      <p className="mt-2 truncate text-xs text-[color:var(--muted)]">{item.name}</p>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  className="mt-4 rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-medium"
+                  onClick={() => setUploadedScreenshots([])}
+                  type="button"
+                >
+                  Clear uploaded screenshots
+                </button>
+              </>
+            ) : (
+              <p className="mt-4 text-sm text-[color:var(--muted)]">
+                No screenshots uploaded. The existing synthetic screenshot mode remains available as a fallback once an icon is generated.
+              </p>
+            )}
+          </div>
 
           <div className="mt-6 rounded-[28px] border border-dashed border-[color:var(--line)] bg-white/70 p-5">
             <p className="text-sm font-medium">Icon preview</p>
@@ -673,6 +969,19 @@ export function StudioClient() {
           </div>
 
           <p className="mt-4 text-sm text-[color:var(--muted)]">{brand.palette.rationale}</p>
+
+          <div className="mt-8">
+            <h3 className="text-lg font-semibold">ASO copy narrative</h3>
+            <div className="mt-4 grid gap-3">
+              {narrative.map((frame) => (
+                <article key={frame.id} className="rounded-3xl bg-white p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--brand)]">{frame.label}</p>
+                  <p className="mt-2 text-lg font-semibold">{frame.headline}</p>
+                  <p className="mt-2 text-sm leading-6 text-[color:var(--muted)]">{frame.subtext}</p>
+                </article>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
@@ -681,7 +990,7 @@ export function StudioClient() {
           <div>
             <h2 className="text-xl font-semibold">Screenshot listing preview</h2>
             <p className="mt-2 text-sm text-[color:var(--muted)]">
-              Six App Store templates rendered for both iPhone and iPad with device-safe spacing and stronger hierarchy.
+              Six narrative frames rendered for both iPhone and iPad with App Store-safe copy hierarchy and export-ready PNGs.
             </p>
           </div>
           <div className="rounded-full bg-white px-4 py-2 text-sm">{mockups.length} assets generated</div>
@@ -691,12 +1000,14 @@ export function StudioClient() {
           <>
             <div className="mt-5 overflow-x-auto">
               <div className="flex min-w-max gap-3 pb-2">
-                {mockups.filter((m) => m.device === "iphone").map((mockup) => (
-                  <div key={`strip-${mockup.id}`} className="w-40 shrink-0 rounded-2xl border border-[color:var(--line)] bg-white p-2">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img alt={mockup.title} className="aspect-[3/4] w-full rounded-xl object-cover" src={mockup.dataUrl} />
-                  </div>
-                ))}
+                {mockups
+                  .filter((mockup) => mockup.device === "iphone")
+                  .map((mockup) => (
+                    <div key={`strip-${mockup.id}`} className="w-40 shrink-0 rounded-2xl border border-[color:var(--line)] bg-white p-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img alt={mockup.title} className="aspect-[3/4] w-full rounded-xl object-cover" src={mockup.dataUrl} />
+                    </div>
+                  ))}
               </div>
             </div>
 
@@ -707,10 +1018,14 @@ export function StudioClient() {
                   <img alt={mockup.title} className="aspect-[3/4] w-full rounded-[20px] border border-[color:var(--line)] object-cover" src={mockup.dataUrl} />
                   <div className="mt-4 flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold capitalize">{mockup.template}</p>
+                      <p className="text-sm font-semibold capitalize">{mockup.title}</p>
                       <p className="text-xs uppercase tracking-[0.12em] text-[color:var(--muted)]">{mockup.device}</p>
                     </div>
-                    <button className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-medium" onClick={() => downloadUrl(mockup.dataUrl, `${mockup.id}.png`)} type="button">
+                    <button
+                      className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-medium"
+                      onClick={() => downloadUrl(mockup.dataUrl, `${mockup.id}.png`)}
+                      type="button"
+                    >
                       Export PNG
                     </button>
                   </div>
@@ -719,7 +1034,9 @@ export function StudioClient() {
             </div>
           </>
         ) : (
-          <p className="mt-6 text-sm text-[color:var(--muted)]">Generate an icon, then render mockups here.</p>
+          <p className="mt-6 text-sm text-[color:var(--muted)]">
+            Upload screenshots for real-UI output, or generate an icon first to use the marked fallback mode.
+          </p>
         )}
       </section>
 

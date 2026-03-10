@@ -26,12 +26,16 @@ const iconStylePromptMap: Record<StudioForm["iconStyle"], string> = {
 const buildIconPrompt = (form: StudioForm) => {
   const appName = form.appName.trim() || "app";
   const tagline = form.tagline.trim();
+  const targetAudience = form.targetAudience.trim();
+  const valueProposition = form.valueProposition.trim();
   const featureText = form.features.trim();
 
   return [
     `Create a premium 1024x1024 iOS app icon for ${appName}.`,
     `Product idea: ${form.prompt.trim()}.`,
     tagline ? `Tagline: ${tagline}.` : "",
+    targetAudience ? `Target audience: ${targetAudience}.` : "",
+    valueProposition ? `Value proposition: ${valueProposition}.` : "",
     featureText ? `Core features: ${featureText}.` : "",
     iconStylePromptMap[form.iconStyle],
     "iOS icon constraints: one centered symbol, bold shape language, vivid gradient background, high contrast, and minimal clutter.",

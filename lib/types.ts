@@ -4,13 +4,18 @@ export type IconStylePreset = "glassy" | "flat-bold" | "3d-soft";
 
 export type ScreenshotTone = "minimal" | "vibrant" | "premium";
 
+export type ScreenshotStrategy = "conversion" | "premium" | "playful";
+
 export type StudioForm = {
   prompt: string;
   appName: string;
   tagline: string;
+  targetAudience: string;
+  valueProposition: string;
   features: string;
   iconStyle: IconStylePreset;
   screenshotTone: ScreenshotTone;
+  screenshotStrategy: ScreenshotStrategy;
 };
 
 export type ProviderConfig = {
@@ -37,6 +42,19 @@ export type CopySuggestion = {
   bullets: string[];
 };
 
+export type AsoFrame = {
+  id:
+    | "value-promise"
+    | "feature-one"
+    | "feature-two"
+    | "trust"
+    | "outcome"
+    | "cta";
+  label: string;
+  headline: string;
+  subtext: string;
+};
+
 export type BrandSuggestion = {
   palette: PaletteSuggestion;
   copy: CopySuggestion;
@@ -51,4 +69,3 @@ export type MockupVariant = {
   title: string;
   dataUrl: string;
 };
-

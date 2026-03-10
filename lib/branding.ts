@@ -24,7 +24,7 @@ const paletteBank: PaletteSuggestion[] = [
 ];
 
 function normalizeWords(form: StudioForm): string[] {
-  return `${form.prompt} ${form.appName} ${form.tagline} ${form.features}`
+  return `${form.prompt} ${form.appName} ${form.tagline} ${form.targetAudience} ${form.valueProposition} ${form.features}`
     .toLowerCase()
     .replace(/[^a-z0-9,\s-]/g, " ")
     .split(/[\s,\n]+/)
@@ -76,7 +76,10 @@ export function deriveBrandSuggestion(form: StudioForm): BrandSuggestion {
   const featureList = makeFeatureList(form, words);
   const appName = form.appName.trim() || "Your App";
   const inferredKeywords = Array.from(new Set(words)).slice(0, 6);
-  const headline = form.tagline.trim() || `${appName} makes ${words[0] ?? "work"} feel simple.`;
+  const headline =
+    form.valueProposition.trim() ||
+    form.tagline.trim() ||
+    `${appName} makes ${words[0] ?? "work"} feel simple.`;
 
   return {
     palette,
@@ -84,13 +87,12 @@ export function deriveBrandSuggestion(form: StudioForm): BrandSuggestion {
     featureList,
     copy: {
       headline,
-      subheadline: `Position ${appName} as a polished, trustworthy app from day one with a cohesive brand kit and launch-ready screenshots.`,
+      subheadline: `Position ${appName} for ${form.targetAudience.trim() || "the right audience"} with a polished brand kit and App Store screenshots that spotlight ${featureList[0]?.toLowerCase() ?? "the core value"}.`,
       bullets: [
         `Lead with ${palette.name.toLowerCase()} styling across the icon and screenshots.`,
-        `Emphasize ${featureList[0]?.toLowerCase() ?? "clarity"} in app store copy.`,
+        `Emphasize ${form.valueProposition.trim().toLowerCase() || featureList[0]?.toLowerCase() || "clarity"} in App Store copy.`,
         "Keep trademarked names, logos, and celebrity likenesses out of generated assets."
       ]
     }
   };
 }
-
