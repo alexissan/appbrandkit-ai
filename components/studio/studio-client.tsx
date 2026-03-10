@@ -26,6 +26,33 @@ const defaultForm: StudioForm = {
   features: ""
 };
 
+const starterPrompts = [
+  {
+    title: "Marine planning app",
+    prompt:
+      "A marine weather app for sailors and kite surfers. It predicts safe launch windows, wave quality, and creates simple route confidence cards.",
+    appName: "TidalFlow",
+    tagline: "Sail and ride with confidence.",
+    features: "Live marine conditions\nRoute confidence score\nSafety alerts"
+  },
+  {
+    title: "Creator growth assistant",
+    prompt:
+      "An app for creators to plan short-form content with AI hooks, posting cadence, and weekly growth insights.",
+    appName: "PulseBoard",
+    tagline: "Grow with a repeatable publishing system.",
+    features: "Content sprint planner\nHook library\nWeekly performance recap"
+  },
+  {
+    title: "Family operations hub",
+    prompt:
+      "A shared family organizer for groceries, school tasks, routines, and reminders with a calm, premium visual style.",
+    appName: "NestNote",
+    tagline: "Keep family life in sync.",
+    features: "Shared lists\nSmart reminders\nHome timeline"
+  }
+];
+
 const iphoneSize = { width: 1290, height: 2796 };
 const ipadSize = { width: 2064, height: 2752 };
 
@@ -348,6 +375,40 @@ export function StudioClient() {
           Back to landing
         </Link>
       </header>
+
+      <section className="glass rounded-[28px] p-6 md:p-8">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold">Try these prompts</h2>
+            <p className="mt-2 text-sm text-[color:var(--muted)]">
+              Use one of these starter briefs to generate a full kit fast, then customize.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-3">
+          {starterPrompts.map((starter) => (
+            <article key={starter.title} className="rounded-3xl bg-white p-4">
+              <p className="text-sm font-semibold">{starter.title}</p>
+              <p className="mt-2 text-sm leading-6 text-[color:var(--muted)]">{starter.prompt}</p>
+              <button
+                className="mt-4 rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-medium"
+                onClick={() =>
+                  setForm({
+                    prompt: starter.prompt,
+                    appName: starter.appName,
+                    tagline: starter.tagline,
+                    features: starter.features
+                  })
+                }
+                type="button"
+              >
+                Use this prompt
+              </button>
+            </article>
+          ))}
+        </div>
+      </section>
 
       <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="glass rounded-[28px] p-6 md:p-8">
