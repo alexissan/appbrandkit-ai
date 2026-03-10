@@ -177,8 +177,11 @@ function buildValueFrame(context: AsoContext, seed: string, variant: number): As
   const headline = pickVariant(
     [
       context.promiseShort,
-      `A ${context.strategyWord} way to ${takeWords(context.valuePropLower, 4, context.valuePropLower)}`,
-      `${context.promiseShort}, without the drag`
+      `${context.promiseShort} in minutes`,
+      `${takeWords(context.valuePropLower, 4, context.valuePropLower)} starts here`,
+      `Skip the wait, ${context.valuePropLower}`,
+      `Your shortcut to ${context.valuePropLower}`,
+      `${context.promiseShort}, no hassle`
     ],
     `${seed}:headline`,
     variant
@@ -186,9 +189,12 @@ function buildValueFrame(context: AsoContext, seed: string, variant: number): As
 
   const subtext = pickVariant(
     [
-      `${context.appName} helps ${context.audienceLower} ${context.valuePropLower} with a ${context.toneWord} first-run story.`,
-      `Built for ${context.audienceLower}, ${context.appName} turns ${context.valuePropLower} into something that feels immediate.`,
-      `${context.appName} gives ${context.audienceLower} a ${context.strategyWord} path to ${context.valuePropLower}.`
+      `${context.appName} brings ${context.audienceLower} exactly what they need: ${context.valuePropLower}.`,
+      `Built for ${context.audienceLower} who want results, not complexity.`,
+      `See instant value. No learning curve required.`,
+      `${context.appName} removes friction so you can focus on outcomes.`,
+      `Join ${context.audienceLower} who've simplified their workflow.`,
+      `Transform how ${context.audienceLower} achieve ${context.valuePropLower}.`
     ],
     `${seed}:subtext`,
     variant
@@ -197,8 +203,8 @@ function buildValueFrame(context: AsoContext, seed: string, variant: number): As
   return {
     id: "value-promise",
     label: FRAME_LABELS["value-promise"],
-    headline: sentenceCase(clipText(headline, 54)),
-    subtext: sentenceCase(clipText(subtext, 120))
+    headline: sentenceCase(clipText(headline, 50)),
+    subtext: sentenceCase(clipText(subtext, 100))
   };
 }
 
@@ -210,18 +216,48 @@ function buildFeatureFrame(
   variant: number
 ): AsoFrame {
   const featureLower = feature.toLowerCase();
+  const isPrimary = id === "feature-one";
+  
   const headline = pickVariant(
-    [feature, `${feature} that feels ${context.strategyWord}`, `Stay on top of ${featureLower}`],
+    isPrimary
+      ? [
+          `${feature} in seconds`,
+          `Unlock ${featureLower} instantly`,
+          `${feature} without the wait`,
+          `Get ${featureLower} right away`,
+          `Access ${featureLower} effortlessly`,
+          `${feature} at your fingertips`
+        ]
+      : [
+          `${feature} you'll actually use`,
+          `Master ${featureLower} quickly`,
+          `${feature} that adapts to you`,
+          `Powerful ${featureLower} made simple`,
+          `${feature} built for speed`,
+          `Smarter ${featureLower} workflows`
+        ],
     `${seed}:headline`,
     variant
   );
 
   const subtext = pickVariant(
-    [
-      `${feature} keeps ${context.audienceLower} moving without extra taps or second-guessing.`,
-      `Use ${featureLower} to make ${context.valuePropLower} feel lighter from the first session.`,
-      `${feature} turns the core job into a quicker, calmer step for ${context.audienceLower}.`
-    ],
+    isPrimary
+      ? [
+          `Save hours with ${featureLower} that works from day one.`,
+          `Zero setup required. Start using ${featureLower} immediately.`,
+          `${feature} designed to eliminate busywork.`,
+          `Tap once and ${featureLower} handles the rest.`,
+          `Watch ${context.audienceLower} accomplish more in less time.`,
+          `Built to make ${featureLower} feel automatic.`
+        ]
+      : [
+          `${feature} completes tasks ${context.audienceLower} used to dread.`,
+          `Go deeper with ${featureLower} that scales alongside you.`,
+          `Advanced ${featureLower} without the complexity.`,
+          `Everything about ${featureLower} is intuitive and reliable.`,
+          `Push further using ${featureLower} tailored for ${context.audienceLower}.`,
+          `${feature} turns ambitious goals into daily wins.`
+        ],
     `${seed}:subtext`,
     variant
   );
@@ -229,24 +265,34 @@ function buildFeatureFrame(
   return {
     id,
     label: FRAME_LABELS[id],
-    headline: sentenceCase(clipText(headline, 54)),
-    subtext: sentenceCase(clipText(subtext, 120))
+    headline: sentenceCase(clipText(headline, 50)),
+    subtext: sentenceCase(clipText(subtext, 100))
   };
 }
 
 function buildTrustFrame(context: AsoContext, seed: string, variant: number): AsoFrame {
   const keyword = context.promptKeywords[0] ?? "daily";
   const headline = pickVariant(
-    [`Designed for ${context.audience}`, `${context.toneWord} by design`, `Confidence in every ${keyword} check`],
+    [
+      `Trusted by ${context.audience}`,
+      `Built with ${context.audience} in mind`,
+      `Reliable for every ${keyword} task`,
+      `${context.audience} depend on us`,
+      `Privacy-first for ${context.audience}`,
+      `Secure and dependable`
+    ],
     `${seed}:headline`,
     variant
   );
 
   const subtext = pickVariant(
     [
-      `${context.appName} pairs ${context.trustFeature.toLowerCase()} with a calm interface that reads as credible at a glance.`,
-      `The flow stays ${context.toneWord} and trustworthy, so ${context.audienceLower} can act faster with less doubt.`,
-      `${context.trustFeature} and clean hierarchy give the product a more believable, premium feel.`
+      `${context.trustFeature} keeps data safe while delivering speed.`,
+      `Thousands of ${context.audienceLower} trust ${context.appName} daily.`,
+      `Bank-level security meets intuitive design.`,
+      `Your information stays private. Always.`,
+      `${context.appName} earns trust through transparency and performance.`,
+      `Rest easy knowing ${context.trustFeature.toLowerCase()} protects you.`
     ],
     `${seed}:subtext`,
     variant
@@ -255,24 +301,34 @@ function buildTrustFrame(context: AsoContext, seed: string, variant: number): As
   return {
     id: "trust",
     label: FRAME_LABELS.trust,
-    headline: sentenceCase(clipText(headline, 54)),
-    subtext: sentenceCase(clipText(subtext, 120))
+    headline: sentenceCase(clipText(headline, 50)),
+    subtext: sentenceCase(clipText(subtext, 100))
   };
 }
 
 function buildOutcomeFrame(context: AsoContext, seed: string, variant: number): AsoFrame {
   const keyword = context.promptKeywords[1] ?? "progress";
   const headline = pickVariant(
-    [`More ${keyword}, less friction`, `Make space for the result`, `See results sooner`],
+    [
+      `Achieve real ${keyword} faster`,
+      `See tangible results today`,
+      `Unlock measurable improvements`,
+      `Drive outcomes, not busywork`,
+      `Reach your goals quicker`,
+      `Accomplish more, stress less`
+    ],
     `${seed}:headline`,
     variant
   );
 
   const subtext = pickVariant(
     [
-      `Spend less time managing details and more time getting the outcome that actually matters.`,
-      `${context.appName} removes drag so ${context.audienceLower} can focus on the win, not the workflow.`,
-      `A tighter flow means more energy goes into results instead of setup, checking, and cleanup.`
+      `Stop wasting time on overhead and start seeing wins.`,
+      `${context.appName} converts effort into clear achievements.`,
+      `Measure what matters and watch ${keyword} accelerate.`,
+      `Focus on impact while ${context.appName} handles details.`,
+      `Turn daily tasks into meaningful milestones.`,
+      `Experience the satisfaction of consistent ${keyword}.`
     ],
     `${seed}:subtext`,
     variant
@@ -281,23 +337,33 @@ function buildOutcomeFrame(context: AsoContext, seed: string, variant: number): 
   return {
     id: "outcome",
     label: FRAME_LABELS.outcome,
-    headline: sentenceCase(clipText(headline, 54)),
-    subtext: sentenceCase(clipText(subtext, 120))
+    headline: sentenceCase(clipText(headline, 50)),
+    subtext: sentenceCase(clipText(subtext, 100))
   };
 }
 
 function buildCtaFrame(context: AsoContext, seed: string, variant: number): AsoFrame {
   const headline = pickVariant(
-    [`${context.downloadVerb} ${context.appName}`, `${context.promiseShort}. Start now`, `Start with ${context.appName}`],
+    [
+      `Download ${context.appName} free`,
+      `Start your journey today`,
+      `Get ${context.appName} now`,
+      `Join thousands already succeeding`,
+      `Try ${context.appName} risk-free`,
+      `Begin in under 30 seconds`
+    ],
     `${seed}:headline`,
     variant
   );
 
   const subtext = pickVariant(
     [
-      `Download now to give ${context.audienceLower} a ${context.strategyWord} route to ${context.valuePropLower}.`,
-      `Bring ${context.promiseCore.toLowerCase()} into a product story that feels ready to trust from day one.`,
-      `${context.appName} is ready when you want a ${context.toneWord} way to ${context.valuePropLower}.`
+      `Tap download and experience ${context.valuePropLower} immediately.`,
+      `No credit card. No commitment. Just results.`,
+      `Start achieving ${context.promiseCore.toLowerCase()} today.`,
+      `Free to try, built for ${context.audienceLower} who demand quality.`,
+      `Install now and discover why ${context.audienceLower} love us.`,
+      `Ready when you are. Download takes seconds.`
     ],
     `${seed}:subtext`,
     variant
@@ -306,8 +372,8 @@ function buildCtaFrame(context: AsoContext, seed: string, variant: number): AsoF
   return {
     id: "cta",
     label: FRAME_LABELS.cta,
-    headline: sentenceCase(clipText(headline, 54)),
-    subtext: sentenceCase(clipText(subtext, 120))
+    headline: sentenceCase(clipText(headline, 50)),
+    subtext: sentenceCase(clipText(subtext, 100))
   };
 }
 
