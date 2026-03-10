@@ -2,6 +2,10 @@
 
 Open-source MVP web app for turning an app idea into a starter brand kit with BYOK AI providers.
 
+## Live demo
+
+- https://appbrandkit-ai.vercel.app/
+
 ## Stack
 
 - Next.js App Router
@@ -53,6 +57,24 @@ This runs `scripts/dev-with-keychain.sh`, which reads the key from Keychain, exp
 - Server-side `OPENAI_API_KEY` is preferred automatically when present.
 - BYOK key input remains available but optional, and is only used when no server key exists.
 - BYOK provider/key preferences are still stored in `localStorage` for local MVP convenience.
+
+## Screenshots
+
+### Landing
+
+![AppBrandKit AI landing](docs/screenshots/landing.jpg)
+
+### Studio
+
+![AppBrandKit AI studio](docs/screenshots/studio.jpg)
+
+## Trust & privacy (BYOK)
+
+- You can run with your own provider key (BYOK) so usage/cost stays under your account.
+- For local macOS dev, use Keychain-backed startup (`npm run dev:keychain`) instead of plaintext keys.
+- Server-side `OPENAI_API_KEY` (when present) is preferred over browser input.
+- Browser key input is optional fallback for local MVP convenience and is stored locally in `localStorage`.
+- Never share production keys publicly; use scoped/revocable keys and rotate if exposed.
 
 ## Visual output upgrades
 
