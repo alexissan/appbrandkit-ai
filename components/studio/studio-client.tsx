@@ -123,6 +123,13 @@ function downloadUrl(url: string, filename: string) {
   link.click();
 }
 
+async function srcToBlob(src: string): Promise<Blob> {
+  if (src.startsWith("data:")) return dataUrlToBlob(src);
+  const res = await fetch(src);
+  if (!res.ok) throw new Error("Failed to fetch image source for export.");
+  return await res.blob();
+}
+
 async function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -661,6 +668,83 @@ export function StudioClient() {
     setStatusMessage("Icon ZIP exported.");
   };
 
+  const handleExportScreenshotsZip = async () => {
+    if (mockups.length === 0) {
+      setStatusMessage("Generate screenshots first, then export ZIP.");
+      return;
+    }
+
+    const JSZip = (await import("jszip")).default;
+    const zip = new JSZip();
+    for (const shot of mockups) {
+      const blob = dataUrlToBlob(shot.dataUrl);
+      zip.file(`screenshots/${shot.device}/${shot.id}.png`, blob);
+    }
+
+    const archive = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(archive);
+    downloadUrl(url, "appbrandkit-screenshots.zip");
+    URL.revokeObjectURL(url);
+    setStatusMessage(`Exported ${mockups.length} screenshots as ZIP.`);
+  };
+
+  const handleExportAllZip = async () => {
+    if (!iconSrc && mockups.length === 0) {
+      setStatusMessage("Nothing to export yet. Generate icon and/or screenshots first.");
+      return;
+    }
+
+    const JSZip = (await import("jszip")).default;
+    const zip = new JSZip();
+
+    if (iconSrc) {
+      try {
+        const iconBlob = await srcToBlob(iconSrc);
+        zip.file("preview/icon.png", iconBlob);
+      } catch {
+        // ignore icon preview fetch failures
+      }
+
+      if (iconSrc.startsWith("data:image")) {
+        const response = await fetch("/api/export-icons", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageDataUrl: iconSrc })
+        });
+        if (response.ok) {
+          const iconZipBlob = await response.blob();
+          zip.file("ios-icon-set/appbrandkit-icons.zip", iconZipBlob);
+        }
+      }
+    }
+
+    for (const shot of mockups) {
+      zip.file(`screenshots/${shot.device}/${shot.id}.png`, dataUrlToBlob(shot.dataUrl));
+    }
+
+    const readme = [
+      "AppBrandKit export bundle",
+      "",
+      `Generated at: ${new Date().toISOString()}`,
+      `Screenshots: ${mockups.length}`,
+      `Icon included: ${iconSrc ? "yes" : "no"}`,
+      "",
+      "Contents:",
+      "- preview/icon.png (if available)",
+      "- ios-icon-set/appbrandkit-icons.zip (if icon was data-url generated)",
+      "- screenshots/iphone/*.png",
+      "- screenshots/ipad/*.png"
+    ].join("\n");
+
+    zip.file("README.txt", readme);
+
+    const archive = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(archive);
+    downloadUrl(url, "appbrandkit-export-bundle.zip");
+    URL.revokeObjectURL(url);
+    setStatusMessage("Exported full bundle ZIP (icons + screenshots). ");
+  };
+
   return (
     <div className="shell flex flex-col gap-8 py-10 md:gap-10">
       <header className="glass rounded-[34px] p-6 md:p-8">
@@ -922,6 +1006,22 @@ export function StudioClient() {
             >
               Export iOS icon ZIP
             </button>
+            <button
+              className="btn-ghost disabled:opacity-50"
+              disabled={mockups.length === 0}
+              onClick={handleExportScreenshotsZip}
+              type="button"
+            >
+              Export screenshots ZIP
+            </button>
+            <button
+              className="btn-ghost disabled:opacity-50"
+              disabled={!iconSrc && mockups.length === 0}
+              onClick={handleExportAllZip}
+              type="button"
+            >
+              Export full bundle ZIP
+            </button>
           </div>
 
           {statusMessage ? <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm">{statusMessage}</p> : null}
@@ -1040,7 +1140,7 @@ export function StudioClient() {
           <div>
             <h2 className="text-xl font-semibold tracking-tight">Screenshot output gallery</h2>
             <p className="mt-2 text-sm text-[color:var(--muted)]">
-              Each run generates six narrative templates across iPhone and iPad. Export individual PNGs instantly.
+              Each run generates six narrative templates across iPhone and iPad. Export individual PNGs or download ZIP bundles in one click.
             </p>
           </div>
           <div className="rounded-full bg-white px-4 py-2 text-sm">{mockups.length} assets generated</div>
