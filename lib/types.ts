@@ -1,10 +1,16 @@
 export type AIProvider = "openai" | "gemini" | "anthropic";
 
+export type IconStylePreset = "glassy" | "flat-bold" | "3d-soft";
+
+export type ScreenshotTone = "minimal" | "vibrant" | "premium";
+
 export type StudioForm = {
   prompt: string;
   appName: string;
   tagline: string;
   features: string;
+  iconStyle: IconStylePreset;
+  screenshotTone: ScreenshotTone;
 };
 
 export type ProviderConfig = {

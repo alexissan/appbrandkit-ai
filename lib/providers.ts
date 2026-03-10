@@ -14,17 +14,29 @@ type ImageProviderAdapter = {
 const notSupportedMessage =
   "This provider is wired into the architecture, but image generation is not implemented yet in this MVP.";
 
+const iconStylePromptMap: Record<StudioForm["iconStyle"], string> = {
+  glassy:
+    "Style preset: Glassy. Use translucent layers, luminous highlights, and soft depth while preserving a bold central symbol.",
+  "flat-bold":
+    "Style preset: Flat Bold. Use crisp geometric blocks, saturated colors, and sharp contrast with minimal effects.",
+  "3d-soft":
+    "Style preset: 3D Soft. Use rounded, tactile forms with subtle shadows and friendly dimensional lighting."
+};
+
 const buildIconPrompt = (form: StudioForm) => {
   const appName = form.appName.trim() || "app";
   const tagline = form.tagline.trim();
   const featureText = form.features.trim();
 
   return [
-    `Create a clean 1024x1024 mobile app icon concept for ${appName}.`,
+    `Create a premium 1024x1024 iOS app icon for ${appName}.`,
     `Product idea: ${form.prompt.trim()}.`,
     tagline ? `Tagline: ${tagline}.` : "",
     featureText ? `Core features: ${featureText}.` : "",
-    "Style: premium, geometric, high contrast, simple silhouette, no tiny text, no device frame, no watermark, App Store friendly."
+    iconStylePromptMap[form.iconStyle],
+    "iOS icon constraints: one centered symbol, bold shape language, vivid gradient background, high contrast, and minimal clutter.",
+    "No text, no letters, no numbers, no watermark, no device frame, no logo lockups.",
+    "Output should look colorful, modern, and App Store-ready at first glance."
   ]
     .filter(Boolean)
     .join(" ");
@@ -32,13 +44,6 @@ const buildIconPrompt = (form: StudioForm) => {
 
 const openAIAdapter: ImageProviderAdapter = {
   async generateIcon(form, config) {
-    if (!config.apiKey.trim()) {
-      return {
-        supported: true,
-        message: "Add an OpenAI API key to generate an icon."
-      };
-    }
-
     const response = await fetch("/api/providers/openai/image", {
       method: "POST",
       headers: {
@@ -86,4 +91,3 @@ export async function generateIconWithProvider(
 ): Promise<IconGenerationResult> {
   return providers[config.provider].generateIcon(form, config);
 }
-

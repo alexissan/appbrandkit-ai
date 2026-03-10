@@ -16,7 +16,9 @@ export async function POST(request: Request) {
     prompt?: string;
   };
 
-  if (!body.apiKey || !body.prompt) {
+  const apiKey = process.env.OPENAI_API_KEY || body.apiKey;
+
+  if (!apiKey || !body.prompt) {
     return NextResponse.json(
       { error: "Missing API key or prompt." },
       { status: 400 }
@@ -27,7 +29,7 @@ export async function POST(request: Request) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${body.apiKey}`
+      Authorization: `Bearer ${apiKey}`
     },
     body: JSON.stringify({
       model: "gpt-image-1",

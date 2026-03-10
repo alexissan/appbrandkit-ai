@@ -6,8 +6,10 @@ import { deriveBrandSuggestion } from "@/lib/branding";
 import { generateIconWithProvider } from "@/lib/providers";
 import type {
   AIProvider,
+  IconStylePreset,
   MockupVariant,
   ProviderConfig,
+  ScreenshotTone,
   StudioForm
 } from "@/lib/types";
 
@@ -17,13 +19,27 @@ const providerLabels: Record<AIProvider, string> = {
   anthropic: "Anthropic"
 };
 
+const iconStyleLabels: Record<IconStylePreset, string> = {
+  glassy: "Glassy",
+  "flat-bold": "Flat Bold",
+  "3d-soft": "3D Soft"
+};
+
+const screenshotToneLabels: Record<ScreenshotTone, string> = {
+  minimal: "Minimal",
+  vibrant: "Vibrant",
+  premium: "Premium"
+};
+
 const localStorageKey = "appbrandkit-byok";
 
 const defaultForm: StudioForm = {
   prompt: "",
   appName: "",
   tagline: "",
-  features: ""
+  features: "",
+  iconStyle: "glassy",
+  screenshotTone: "vibrant"
 };
 
 const starterPrompts = [
@@ -56,9 +72,20 @@ const starterPrompts = [
 const iphoneSize = { width: 1290, height: 2796 };
 const ipadSize = { width: 2064, height: 2752 };
 
+const screenshotTemplates = [
+  "hero-focus",
+  "feature-cards",
+  "split-editorial",
+  "device-frame",
+  "benefit-grid",
+  "closing-cta"
+] as const;
+
+type ScreenshotTemplate = (typeof screenshotTemplates)[number];
+
 function parseFeatures(features: string): string[] {
   return features
-    .split(/\n|,/)
+    .split(/\n|,/) 
     .map((entry) => entry.trim())
     .filter(Boolean)
     .slice(0, 4);
@@ -95,13 +122,19 @@ function wrapText(
   x: number,
   y: number,
   maxWidth: number,
-  lineHeight: number
+  lineHeight: number,
+  maxLines = 3
 ) {
   const words = text.split(" ");
   let line = "";
   let offsetY = 0;
+  let lineCount = 0;
 
   words.forEach((word) => {
+    if (lineCount >= maxLines) {
+      return;
+    }
+
     const testLine = `${line}${word} `;
     const width = context.measureText(testLine).width;
 
@@ -109,24 +142,63 @@ function wrapText(
       context.fillText(line.trim(), x, y + offsetY);
       line = `${word} `;
       offsetY += lineHeight;
+      lineCount += 1;
       return;
     }
 
     line = testLine;
   });
 
-  if (line) {
+  if (line && lineCount < maxLines) {
     context.fillText(line.trim(), x, y + offsetY);
   }
 }
 
-function renderTemplate(
+function toneColors(tone: ScreenshotTone, palette: string[]) {
+  const [primary, secondary, surface, text] = palette;
+
+  if (tone === "minimal") {
+    return {
+      gradientA: "#f8fafc",
+      gradientB: "#e2e8f0",
+      card: "rgba(255,255,255,0.94)",
+      chip: "rgba(15,23,42,0.06)",
+      title: "#0f172a",
+      body: "#334155",
+      accent: primary
+    };
+  }
+
+  if (tone === "premium") {
+    return {
+      gradientA: "#0f172a",
+      gradientB: "#312e81",
+      card: "rgba(15,23,42,0.55)",
+      chip: "rgba(255,255,255,0.12)",
+      title: "#f8fafc",
+      body: "#cbd5e1",
+      accent: "#f59e0b"
+    };
+  }
+
+  return {
+    gradientA: primary,
+    gradientB: secondary,
+    card: "rgba(255,255,255,0.18)",
+    chip: "rgba(255,255,255,0.2)",
+    title: "#ffffff",
+    body: surface,
+    accent: text
+  };
+}
+
+async function renderTemplate(
   canvas: HTMLCanvasElement,
   options: {
     form: StudioForm;
     iconSrc: string;
     palette: string[];
-    template: string;
+    template: ScreenshotTemplate;
     device: "iphone" | "ipad";
   }
 ) {
@@ -135,96 +207,143 @@ function renderTemplate(
   canvas.height = size.height;
 
   const context = canvas.getContext("2d");
+  if (!context) return;
 
-  if (!context) {
-    return;
+  const appName = options.form.appName.trim() || "Your App";
+  const tagline =
+    options.form.tagline.trim() || "Launch a polished experience from first glance.";
+  const features = parseFeatures(options.form.features);
+  const tone = toneColors(options.form.screenshotTone, options.palette);
+
+  const icon = await loadImage(options.iconSrc);
+
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  const gradient = context.createLinearGradient(0, 0, canvas.width, canvas.height);
+  gradient.addColorStop(0, tone.gradientA);
+  gradient.addColorStop(1, tone.gradientB);
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  const safeX = canvas.width * 0.08;
+  const safeY = canvas.height * 0.08;
+  const safeW = canvas.width * 0.84;
+  const safeH = canvas.height * 0.84;
+
+  context.fillStyle = tone.card;
+  context.strokeStyle = "rgba(255,255,255,0.22)";
+  context.lineWidth = 2;
+  context.beginPath();
+  context.roundRect(safeX, safeY, safeW, safeH, 48);
+  context.fill();
+  context.stroke();
+
+  const badgeSize = options.device === "iphone" ? 188 : 220;
+  context.drawImage(icon, safeX + 52, safeY + 50, badgeSize, badgeSize);
+
+  context.fillStyle = tone.chip;
+  context.beginPath();
+  context.roundRect(safeX + 260, safeY + 88, safeW * 0.22, 66, 33);
+  context.fill();
+  context.fillStyle = tone.title;
+  context.font = "600 40px sans-serif";
+  context.fillText("App Store Ready", safeX + 292, safeY + 133);
+
+  const titleY = safeY + 350;
+  context.fillStyle = tone.title;
+  context.font = options.device === "iphone" ? "700 132px sans-serif" : "700 120px sans-serif";
+  wrapText(context, appName, safeX + 56, titleY, safeW * 0.72, 138, 2);
+  context.font = options.device === "iphone" ? "500 58px sans-serif" : "500 54px sans-serif";
+  context.fillStyle = tone.body;
+  wrapText(context, tagline, safeX + 56, titleY + 170, safeW * 0.7, 72, 3);
+
+  const chipFeatures = features.length > 0 ? features : ["Fast setup", "High-converting visuals", "Launch confidence"];
+
+  if (options.template === "hero-focus") {
+    chipFeatures.slice(0, 3).forEach((feature, index) => {
+      const top = safeY + safeH - 320 + index * 92;
+      context.fillStyle = tone.chip;
+      context.beginPath();
+      context.roundRect(safeX + 56, top, safeW * 0.62, 72, 36);
+      context.fill();
+      context.fillStyle = tone.title;
+      context.font = "500 38px sans-serif";
+      context.fillText(feature, safeX + 84, top + 47);
+    });
   }
 
-  const [primary, secondary, surface, text] = options.palette;
-  const features = parseFeatures(options.form.features);
-  const appName = options.form.appName.trim() || "Your App";
-  const tagline = options.form.tagline.trim() || "Launch with a coherent brand system.";
-
-  const draw = async () => {
-    const icon = await loadImage(options.iconSrc);
-    context.clearRect(0, 0, canvas.width, canvas.height);
-
-    const gradient = context.createLinearGradient(0, 0, canvas.width, canvas.height);
-    gradient.addColorStop(0, primary);
-    gradient.addColorStop(1, secondary);
-    context.fillStyle = gradient;
-    context.fillRect(0, 0, canvas.width, canvas.height);
-
-    if (options.template === "spotlight") {
-      context.fillStyle = "rgba(255,255,255,0.12)";
+  if (options.template === "feature-cards") {
+    chipFeatures.slice(0, 3).forEach((feature, index) => {
+      const left = safeX + 56 + index * (safeW * 0.29);
+      const top = safeY + safeH - 420;
+      context.fillStyle = "rgba(255,255,255,0.22)";
       context.beginPath();
-      context.arc(canvas.width * 0.2, canvas.height * 0.16, canvas.width * 0.18, 0, Math.PI * 2);
+      context.roundRect(left, top, safeW * 0.26, 270, 34);
       context.fill();
-      context.fillStyle = surface;
-      context.fillRect(canvas.width * 0.08, canvas.height * 0.1, canvas.width * 0.84, canvas.height * 0.8);
-      context.drawImage(icon, canvas.width * 0.15, canvas.height * 0.16, 320, 320);
-      context.fillStyle = text;
-      context.font = "bold 144px sans-serif";
-      context.fillText(appName, canvas.width * 0.15, canvas.height * 0.38);
-      context.font = "56px sans-serif";
-      wrapText(context, tagline, canvas.width * 0.15, canvas.height * 0.45, canvas.width * 0.68, 72);
-    }
+      context.fillStyle = tone.accent;
+      context.font = "700 46px sans-serif";
+      context.fillText(`0${index + 1}`, left + 28, top + 68);
+      context.fillStyle = tone.title;
+      context.font = "500 38px sans-serif";
+      wrapText(context, feature, left + 28, top + 132, safeW * 0.2, 46, 3);
+    });
+  }
 
-    if (options.template === "feature-stack") {
-      context.fillStyle = "rgba(255,255,255,0.18)";
-      context.fillRect(canvas.width * 0.08, canvas.height * 0.08, canvas.width * 0.84, canvas.height * 0.84);
-      context.drawImage(icon, canvas.width * 0.64, canvas.height * 0.14, 340, 340);
-      context.fillStyle = "#ffffff";
-      context.font = "bold 148px sans-serif";
-      wrapText(context, appName, canvas.width * 0.12, canvas.height * 0.2, canvas.width * 0.46, 154);
-      context.font = "58px sans-serif";
-      wrapText(context, tagline, canvas.width * 0.12, canvas.height * 0.34, canvas.width * 0.4, 74);
-      features.forEach((feature, index) => {
-        const top = canvas.height * 0.56 + index * 170;
-        context.fillStyle = "rgba(23,32,51,0.1)";
-        context.fillRect(canvas.width * 0.12, top, canvas.width * 0.7, 120);
-        context.fillStyle = text;
-        context.font = "52px sans-serif";
-        context.fillText(feature, canvas.width * 0.15, top + 74);
-      });
-    }
+  if (options.template === "split-editorial") {
+    context.fillStyle = "rgba(255,255,255,0.86)";
+    context.fillRect(safeX + safeW * 0.52, safeY + 30, safeW * 0.43, safeH - 60);
+    context.drawImage(icon, safeX + safeW * 0.62, safeY + 150, safeW * 0.22, safeW * 0.22);
+    context.fillStyle = "#0f172a";
+    context.font = "700 48px sans-serif";
+    context.fillText("Why users love it", safeX + safeW * 0.56, safeY + 500);
+    chipFeatures.slice(0, 3).forEach((feature, index) => {
+      context.font = "500 36px sans-serif";
+      context.fillText(`• ${feature}`, safeX + safeW * 0.56, safeY + 590 + index * 90);
+    });
+  }
 
-    if (options.template === "editorial") {
-      context.fillStyle = "rgba(255,255,255,0.88)";
-      context.fillRect(0, 0, canvas.width * 0.56, canvas.height);
-      context.drawImage(icon, canvas.width * 0.62, canvas.height * 0.18, 520, 520);
-      context.fillStyle = text;
-      context.font = "bold 132px sans-serif";
-      wrapText(context, appName, canvas.width * 0.08, canvas.height * 0.18, canvas.width * 0.34, 138);
-      context.font = "58px sans-serif";
-      wrapText(context, tagline, canvas.width * 0.08, canvas.height * 0.34, canvas.width * 0.34, 72);
-      context.font = "44px sans-serif";
-      features.slice(0, 3).forEach((feature, index) => {
-        context.fillText(`0${index + 1}  ${feature}`, canvas.width * 0.08, canvas.height * 0.58 + index * 110);
-      });
-    }
+  if (options.template === "device-frame") {
+    context.fillStyle = "rgba(15,23,42,0.22)";
+    context.beginPath();
+    context.roundRect(safeX + safeW * 0.57, safeY + 130, safeW * 0.34, safeH * 0.65, 64);
+    context.fill();
+    context.fillStyle = "rgba(255,255,255,0.95)";
+    context.beginPath();
+    context.roundRect(safeX + safeW * 0.6, safeY + 170, safeW * 0.28, safeH * 0.56, 52);
+    context.fill();
+    context.drawImage(icon, safeX + safeW * 0.655, safeY + 260, safeW * 0.16, safeW * 0.16);
+  }
 
-    if (options.template === "bold-frame") {
-      context.fillStyle = "rgba(255,255,255,0.12)";
-      context.fillRect(canvas.width * 0.06, canvas.height * 0.06, canvas.width * 0.88, canvas.height * 0.88);
-      context.strokeStyle = "#ffffff";
-      context.lineWidth = 8;
-      context.strokeRect(canvas.width * 0.08, canvas.height * 0.08, canvas.width * 0.84, canvas.height * 0.84);
-      context.drawImage(icon, canvas.width * 0.12, canvas.height * 0.16, 360, 360);
-      context.fillStyle = "#ffffff";
-      context.font = "bold 152px sans-serif";
-      wrapText(context, appName, canvas.width * 0.12, canvas.height * 0.42, canvas.width * 0.72, 158);
-      context.font = "58px sans-serif";
-      wrapText(context, tagline, canvas.width * 0.12, canvas.height * 0.62, canvas.width * 0.68, 74);
-      context.fillStyle = surface;
-      context.fillRect(canvas.width * 0.12, canvas.height * 0.76, canvas.width * 0.5, 120);
-      context.fillStyle = text;
-      context.font = "44px sans-serif";
-      context.fillText(features[0] ?? "Built for launch-day clarity", canvas.width * 0.15, canvas.height * 0.84);
-    }
-  };
+  if (options.template === "benefit-grid") {
+    const blocks = chipFeatures.slice(0, 4);
+    blocks.forEach((feature, index) => {
+      const col = index % 2;
+      const row = Math.floor(index / 2);
+      const cardW = safeW * 0.42;
+      const cardH = 180;
+      const left = safeX + 56 + col * (cardW + 30);
+      const top = safeY + safeH - 450 + row * (cardH + 24);
+      context.fillStyle = "rgba(255,255,255,0.2)";
+      context.beginPath();
+      context.roundRect(left, top, cardW, cardH, 28);
+      context.fill();
+      context.fillStyle = tone.title;
+      context.font = "600 40px sans-serif";
+      wrapText(context, feature, left + 26, top + 64, cardW - 40, 44, 2);
+    });
+  }
 
-  return draw();
+  if (options.template === "closing-cta") {
+    context.fillStyle = "rgba(255,255,255,0.22)";
+    context.beginPath();
+    context.roundRect(safeX + 56, safeY + safeH - 340, safeW - 112, 230, 34);
+    context.fill();
+    context.fillStyle = tone.title;
+    context.font = "700 68px sans-serif";
+    context.fillText("Download now", safeX + 100, safeY + safeH - 230);
+    context.font = "500 42px sans-serif";
+    context.fillStyle = tone.body;
+    context.fillText("Built for speed, clarity, and launch-day trust.", safeX + 100, safeY + safeH - 160);
+  }
 }
 
 export function StudioClient() {
@@ -241,10 +360,7 @@ export function StudioClient() {
 
   useEffect(() => {
     const raw = window.localStorage.getItem(localStorageKey);
-
-    if (!raw) {
-      return;
-    }
+    if (!raw) return;
 
     try {
       const parsed = JSON.parse(raw) as ProviderConfig;
@@ -256,11 +372,7 @@ export function StudioClient() {
   }, []);
 
   useEffect(() => {
-    const payload: ProviderConfig = {
-      provider,
-      apiKey
-    };
-
+    const payload: ProviderConfig = { provider, apiKey };
     window.localStorage.setItem(localStorageKey, JSON.stringify(payload));
   }, [provider, apiKey]);
 
@@ -277,17 +389,11 @@ export function StudioClient() {
 
     try {
       const result = await generateIconWithProvider(form, { provider, apiKey });
-
-      if (result.imageDataUrl) {
-        setIconSrc(result.imageDataUrl);
-      } else if (result.imageUrl) {
-        setIconSrc(result.imageUrl);
-      }
-
+      if (result.imageDataUrl) setIconSrc(result.imageDataUrl);
+      else if (result.imageUrl) setIconSrc(result.imageUrl);
       setStatusMessage(result.message ?? "Icon generation completed.");
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unexpected generation error.";
+      const message = error instanceof Error ? error.message : "Unexpected generation error.";
       setStatusMessage(message);
     } finally {
       setIsGeneratingIcon(false);
@@ -300,10 +406,9 @@ export function StudioClient() {
       return;
     }
 
-    const templates = ["spotlight", "feature-stack", "editorial", "bold-frame"];
     const variants: MockupVariant[] = [];
 
-    for (const template of templates) {
+    for (const template of screenshotTemplates) {
       for (const device of ["iphone", "ipad"] as const) {
         await renderTemplate(canvasRef.current, {
           form,
@@ -324,25 +429,19 @@ export function StudioClient() {
     }
 
     setMockups(variants);
-    setStatusMessage("Screenshot mockups generated.");
+    setStatusMessage("App Store-style screenshot mockups generated.");
   };
 
   const handleExportIcons = async () => {
     if (!iconSrc.startsWith("data:image")) {
-      setStatusMessage(
-        "Icon ZIP export currently requires a generated or pasted data URL image."
-      );
+      setStatusMessage("Icon ZIP export currently requires a generated or pasted data URL image.");
       return;
     }
 
     const response = await fetch("/api/export-icons", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        imageDataUrl: iconSrc
-      })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageDataUrl: iconSrc })
     });
 
     if (!response.ok) {
@@ -364,28 +463,16 @@ export function StudioClient() {
           <div className="pill mb-4 text-sm font-medium">AppBrandKit AI Studio</div>
           <h1 className="section-title max-w-3xl">Generate a launch-ready app brand kit with your own key.</h1>
           <p className="mt-4 max-w-2xl text-base text-[color:var(--muted)] md:text-lg">
-            Create icon concepts, palette direction, copy hooks, and screenshot mockups
+            Create icon concepts, palette direction, copy hooks, and App Store style screenshot mockups
             for iPhone and iPad without storing platform keys on this app.
           </p>
         </div>
-        <Link
-          href="/"
-          className="rounded-full border border-[color:var(--line)] bg-white px-5 py-3 text-sm font-medium"
-        >
+        <Link href="/" className="rounded-full border border-[color:var(--line)] bg-white px-5 py-3 text-sm font-medium">
           Back to landing
         </Link>
       </header>
 
       <section className="glass rounded-[28px] p-6 md:p-8">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-semibold">Try these prompts</h2>
-            <p className="mt-2 text-sm text-[color:var(--muted)]">
-              Use one of these starter briefs to generate a full kit fast, then customize.
-            </p>
-          </div>
-        </div>
-
         <div className="mt-5 grid gap-4 md:grid-cols-3">
           {starterPrompts.map((starter) => (
             <article key={starter.title} className="rounded-3xl bg-white p-4">
@@ -394,12 +481,13 @@ export function StudioClient() {
               <button
                 className="mt-4 rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-medium"
                 onClick={() =>
-                  setForm({
+                  setForm((current) => ({
+                    ...current,
                     prompt: starter.prompt,
                     appName: starter.appName,
                     tagline: starter.tagline,
                     features: starter.features
-                  })
+                  }))
                 }
                 type="button"
               >
@@ -419,9 +507,7 @@ export function StudioClient() {
                 className="min-h-32 rounded-3xl border border-[color:var(--line)] bg-white px-4 py-3 outline-none"
                 placeholder="Example: An AI meal planner for busy parents that builds weekly shopping lists from dietary goals."
                 value={form.prompt}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, prompt: event.target.value }))
-                }
+                onChange={(event) => setForm((current) => ({ ...current, prompt: event.target.value }))}
               />
             </label>
 
@@ -432,9 +518,7 @@ export function StudioClient() {
                   className="rounded-full border border-[color:var(--line)] bg-white px-4 py-3 outline-none"
                   placeholder="Optional"
                   value={form.appName}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, appName: event.target.value }))
-                  }
+                  onChange={(event) => setForm((current) => ({ ...current, appName: event.target.value }))}
                 />
               </label>
               <label className="grid gap-2">
@@ -443,9 +527,7 @@ export function StudioClient() {
                   className="rounded-full border border-[color:var(--line)] bg-white px-4 py-3 outline-none"
                   placeholder="Optional"
                   value={form.tagline}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, tagline: event.target.value }))
-                  }
+                  onChange={(event) => setForm((current) => ({ ...current, tagline: event.target.value }))}
                 />
               </label>
             </div>
@@ -456,19 +538,48 @@ export function StudioClient() {
                 className="min-h-28 rounded-3xl border border-[color:var(--line)] bg-white px-4 py-3 outline-none"
                 placeholder="Optional. Separate with commas or new lines."
                 value={form.features}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, features: event.target.value }))
-                }
+                onChange={(event) => setForm((current) => ({ ...current, features: event.target.value }))}
               />
             </label>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="grid gap-2">
+                <span className="text-sm font-medium">Icon style preset</span>
+                <select
+                  className="rounded-full border border-[color:var(--line)] bg-white px-4 py-3 outline-none"
+                  value={form.iconStyle}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, iconStyle: event.target.value as IconStylePreset }))
+                  }
+                >
+                  {Object.entries(iconStyleLabels).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="grid gap-2">
+                <span className="text-sm font-medium">Screenshot tone</span>
+                <select
+                  className="rounded-full border border-[color:var(--line)] bg-white px-4 py-3 outline-none"
+                  value={form.screenshotTone}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, screenshotTone: event.target.value as ScreenshotTone }))
+                  }
+                >
+                  {Object.entries(screenshotToneLabels).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
         </div>
 
         <aside className="glass rounded-[28px] p-6 md:p-8">
           <h2 className="text-xl font-semibold">BYOK provider</h2>
           <p className="mt-2 text-sm text-[color:var(--muted)]">
-            API keys are stored in your browser&apos;s localStorage for convenience.
-            This is insecure for production and should not be used for shared or deployed apps.
+            If OPENAI_API_KEY is available on the server, it is preferred automatically. BYOK stays optional for local overrides.
           </p>
 
           <div className="mt-5 grid gap-4">
@@ -480,27 +591,24 @@ export function StudioClient() {
                 onChange={(event) => setProvider(event.target.value as AIProvider)}
               >
                 {Object.entries(providerLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
+                  <option key={value} value={value}>{label}</option>
                 ))}
               </select>
             </label>
 
             <label className="grid gap-2">
-              <span className="text-sm font-medium">API key</span>
+              <span className="text-sm font-medium">API key (optional)</span>
               <input
                 className="rounded-full border border-[color:var(--line)] bg-white px-4 py-3 outline-none"
                 type="password"
-                placeholder="Paste provider key"
+                placeholder="Used only if server key is missing"
                 value={apiKey}
                 onChange={(event) => setApiKey(event.target.value)}
               />
             </label>
 
             <div className="rounded-3xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-              Legal and safety notice: review generated assets before shipping. Avoid
-              trademarked logos, brand lookalikes, copyrighted characters, or misleading claims.
+              Legal and safety notice: review generated assets before shipping. Avoid trademarked logos, brand lookalikes, copyrighted characters, or misleading claims.
             </div>
           </div>
         </aside>
@@ -509,62 +617,31 @@ export function StudioClient() {
       <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
         <div className="glass rounded-[28px] p-6 md:p-8">
           <div className="flex flex-wrap gap-3">
-            <button
-              className="rounded-full bg-[color:var(--foreground)] px-5 py-3 text-sm font-semibold text-white disabled:opacity-50"
-              disabled={!canGenerate || isGeneratingIcon}
-              onClick={handleGenerateIcon}
-              type="button"
-            >
+            <button className="rounded-full bg-[color:var(--foreground)] px-5 py-3 text-sm font-semibold text-white disabled:opacity-50" disabled={!canGenerate || isGeneratingIcon} onClick={handleGenerateIcon} type="button">
               {isGeneratingIcon ? "Generating icon..." : "Generate icon concept"}
             </button>
-            <button
-              className="rounded-full border border-[color:var(--line)] bg-white px-5 py-3 text-sm font-semibold disabled:opacity-50"
-              disabled={!iconSrc}
-              onClick={handleGenerateMockups}
-              type="button"
-            >
+            <button className="rounded-full border border-[color:var(--line)] bg-white px-5 py-3 text-sm font-semibold disabled:opacity-50" disabled={!iconSrc} onClick={handleGenerateMockups} type="button">
               Generate screenshots
             </button>
-            <button
-              className="rounded-full border border-[color:var(--line)] bg-white px-5 py-3 text-sm font-semibold disabled:opacity-50"
-              disabled={!iconSrc}
-              onClick={handleExportIcons}
-              type="button"
-            >
+            <button className="rounded-full border border-[color:var(--line)] bg-white px-5 py-3 text-sm font-semibold disabled:opacity-50" disabled={!iconSrc} onClick={handleExportIcons} type="button">
               Export iOS icon ZIP
             </button>
           </div>
 
-          <p className="mt-4 text-sm text-[color:var(--muted)]">
-            OpenAI image generation is wired now. Gemini and Anthropic are UI-ready but stubbed.
-          </p>
-
-          {statusMessage ? (
-            <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm">{statusMessage}</p>
-          ) : null}
+          {statusMessage ? <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm">{statusMessage}</p> : null}
 
           <div className="mt-6 rounded-[28px] border border-dashed border-[color:var(--line)] bg-white/70 p-5">
             <p className="text-sm font-medium">Icon preview</p>
             {iconSrc ? (
               <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  alt="Generated app icon"
-                  className="h-52 w-52 rounded-[32px] border border-[color:var(--line)] object-cover shadow-sm"
-                  src={iconSrc}
-                />
+                <img alt="Generated app icon" className="h-52 w-52 rounded-[32px] border border-[color:var(--line)] object-cover shadow-sm" src={iconSrc} />
                 <button
                   className="w-fit rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-medium"
                   onClick={() => {
-                    const url = iconSrc.startsWith("data:")
-                      ? URL.createObjectURL(dataUrlToBlob(iconSrc))
-                      : iconSrc;
-
+                    const url = iconSrc.startsWith("data:") ? URL.createObjectURL(dataUrlToBlob(iconSrc)) : iconSrc;
                     downloadUrl(url, "appbrandkit-icon.png");
-
-                    if (iconSrc.startsWith("data:")) {
-                      URL.revokeObjectURL(url);
-                    }
+                    if (iconSrc.startsWith("data:")) URL.revokeObjectURL(url);
                   }}
                   type="button"
                 >
@@ -572,9 +649,7 @@ export function StudioClient() {
                 </button>
               </div>
             ) : (
-              <p className="mt-4 text-sm text-[color:var(--muted)]">
-                Generated icon output appears here.
-              </p>
+              <p className="mt-4 text-sm text-[color:var(--muted)]">Generated icon output appears here.</p>
             )}
           </div>
         </div>
@@ -583,98 +658,68 @@ export function StudioClient() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-xl font-semibold">Brand direction</h2>
-              <p className="mt-2 text-sm text-[color:var(--muted)]">
-                Derived locally from your prompt and optional inputs.
-              </p>
+              <p className="mt-2 text-sm text-[color:var(--muted)]">Derived locally from your prompt and optional inputs.</p>
             </div>
-            <div className="rounded-full bg-white px-4 py-2 text-sm font-medium">
-              {brand.palette.name}
-            </div>
+            <div className="rounded-full bg-white px-4 py-2 text-sm font-medium">{brand.palette.name}</div>
           </div>
 
           <div className="mt-5 flex gap-3">
             {brand.palette.colors.map((color) => (
               <div key={color} className="flex flex-col items-center gap-2">
-                <div
-                  className="h-14 w-14 rounded-2xl border border-black/5"
-                  style={{ backgroundColor: color }}
-                />
+                <div className="h-14 w-14 rounded-2xl border border-black/5" style={{ backgroundColor: color }} />
                 <span className="text-xs text-[color:var(--muted)]">{color}</span>
               </div>
             ))}
           </div>
 
           <p className="mt-4 text-sm text-[color:var(--muted)]">{brand.palette.rationale}</p>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <div className="rounded-3xl bg-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--muted)]">
-                Suggested headline
-              </p>
-              <p className="mt-2 text-lg font-semibold">{brand.copy.headline}</p>
-              <p className="mt-3 text-sm text-[color:var(--muted)]">
-                {brand.copy.subheadline}
-              </p>
-            </div>
-            <div className="rounded-3xl bg-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--muted)]">
-                Positioning bullets
-              </p>
-              <ul className="mt-3 grid gap-3 text-sm text-[color:var(--foreground)]">
-                {brand.copy.bullets.map((bullet) => (
-                  <li key={bullet}>{bullet}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
         </div>
       </section>
 
       <section className="glass rounded-[28px] p-6 md:p-8">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <h2 className="text-xl font-semibold">Screenshot mockups</h2>
+            <h2 className="text-xl font-semibold">Screenshot listing preview</h2>
             <p className="mt-2 text-sm text-[color:var(--muted)]">
-              Four templates rendered for both iPhone and iPad dimensions using canvas.
+              Six App Store templates rendered for both iPhone and iPad with device-safe spacing and stronger hierarchy.
             </p>
           </div>
-          <div className="rounded-full bg-white px-4 py-2 text-sm">
-            {mockups.length} assets generated
-          </div>
+          <div className="rounded-full bg-white px-4 py-2 text-sm">{mockups.length} assets generated</div>
         </div>
 
         {mockups.length > 0 ? (
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            {mockups.map((mockup) => (
-              <article key={mockup.id} className="rounded-[28px] bg-white p-4">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  alt={mockup.title}
-                  className="aspect-[3/4] w-full rounded-[20px] border border-[color:var(--line)] object-cover"
-                  src={mockup.dataUrl}
-                />
-                <div className="mt-4 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold capitalize">{mockup.template}</p>
-                    <p className="text-xs uppercase tracking-[0.12em] text-[color:var(--muted)]">
-                      {mockup.device}
-                    </p>
+          <>
+            <div className="mt-5 overflow-x-auto">
+              <div className="flex min-w-max gap-3 pb-2">
+                {mockups.filter((m) => m.device === "iphone").map((mockup) => (
+                  <div key={`strip-${mockup.id}`} className="w-40 shrink-0 rounded-2xl border border-[color:var(--line)] bg-white p-2">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img alt={mockup.title} className="aspect-[3/4] w-full rounded-xl object-cover" src={mockup.dataUrl} />
                   </div>
-                  <button
-                    className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-medium"
-                    onClick={() => downloadUrl(mockup.dataUrl, `${mockup.id}.png`)}
-                    type="button"
-                  >
-                    Export PNG
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-2">
+              {mockups.map((mockup) => (
+                <article key={mockup.id} className="rounded-[28px] bg-white p-4">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img alt={mockup.title} className="aspect-[3/4] w-full rounded-[20px] border border-[color:var(--line)] object-cover" src={mockup.dataUrl} />
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold capitalize">{mockup.template}</p>
+                      <p className="text-xs uppercase tracking-[0.12em] text-[color:var(--muted)]">{mockup.device}</p>
+                    </div>
+                    <button className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-medium" onClick={() => downloadUrl(mockup.dataUrl, `${mockup.id}.png`)} type="button">
+                      Export PNG
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
         ) : (
-          <p className="mt-6 text-sm text-[color:var(--muted)]">
-            Generate an icon, then render mockups here.
-          </p>
+          <p className="mt-6 text-sm text-[color:var(--muted)]">Generate an icon, then render mockups here.</p>
         )}
       </section>
 
