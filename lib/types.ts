@@ -42,17 +42,23 @@ export type CopySuggestion = {
   bullets: string[];
 };
 
+export type AsoFrameId =
+  | "value-promise"
+  | "feature-one"
+  | "feature-two"
+  | "trust"
+  | "outcome"
+  | "cta";
+
 export type AsoFrame = {
-  id:
-    | "value-promise"
-    | "feature-one"
-    | "feature-two"
-    | "trust"
-    | "outcome"
-    | "cta";
+  id: AsoFrameId;
   label: string;
   headline: string;
   subtext: string;
+};
+
+export type EditableAsoFrame = AsoFrame & {
+  variant: number;
 };
 
 export type BrandSuggestion = {
@@ -65,7 +71,7 @@ export type BrandSuggestion = {
 export type MockupVariant = {
   id: string;
   device: "iphone" | "ipad";
-  template: string;
+  template: AsoFrameId;
   title: string;
   dataUrl: string;
 };

@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { generateAsoNarrative, parseFeatures } from "@/lib/aso";
+import { createEditableAsoNarrative, parseFeatures, regenerateAsoFrame } from "@/lib/aso";
 import { deriveBrandSuggestion } from "@/lib/branding";
+import { canExportBundle, canExportIcons, canExportScreenshots } from "@/lib/export";
 import { generateIconWithProvider } from "@/lib/providers";
 import type {
   AIProvider,
   AsoFrame,
+  EditableAsoFrame,
   IconStylePreset,
   MockupVariant,
   ProviderConfig,
@@ -15,6 +17,8 @@ import type {
   ScreenshotTone,
   StudioForm
 } from "@/lib/types";
+
+type StatusTone = "info" | "success" | "error";
 
 type UploadedScreenshot = {
   id: string;
@@ -300,6 +304,36 @@ function frameBadgeLabel(frame: AsoFrame) {
   }
 }
 
+function frameLayoutVariant(frame: AsoFrame | EditableAsoFrame) {
+  return "variant" in frame ? frame.variant % 3 : 0;
+}
+
+function mergeMockups(current: MockupVariant[], updates: MockupVariant[]) {
+  const next = new Map(current.map((mockup) => [mockup.id, mockup]));
+
+  updates.forEach((mockup) => {
+    next.set(mockup.id, mockup);
+  });
+
+  return Array.from(next.values());
+}
+
+function sortMockups(mockups: MockupVariant[]) {
+  const frameOrder = ["value-promise", "feature-one", "feature-two", "trust", "outcome", "cta"];
+  const deviceOrder = { iphone: 0, ipad: 1 };
+
+  return [...mockups].sort((left, right) => {
+    const leftFrame = frameOrder.indexOf(left.template);
+    const rightFrame = frameOrder.indexOf(right.template);
+
+    if (leftFrame !== rightFrame) {
+      return leftFrame - rightFrame;
+    }
+
+    return deviceOrder[left.device] - deviceOrder[right.device];
+  });
+}
+
 function drawRoundedImage(
   context: CanvasRenderingContext2D,
   image: HTMLImageElement,
@@ -384,7 +418,7 @@ async function renderAsoFrame(
   canvas: HTMLCanvasElement,
   options: {
     form: StudioForm;
-    frame: AsoFrame;
+    frame: AsoFrame | EditableAsoFrame;
     iconSrc?: string;
     palette: string[];
     screenshotSrc?: string;
@@ -403,6 +437,7 @@ async function renderAsoFrame(
     options.form.screenshotTone,
     options.palette
   );
+  const layoutVariant = frameLayoutVariant(options.frame);
   const features = parseFeatures(options.form.features);
   const appName = options.form.appName.trim() || "Your App";
   const screenshotImage = options.screenshotSrc ? await loadImage(options.screenshotSrc) : null;
@@ -438,10 +473,13 @@ async function renderAsoFrame(
   const headlineSize = options.device === "iphone" ? 102 : 112;
   const subtextSize = options.device === "iphone" ? 42 : 46;
   const frameWidth = safeW * 0.8;
+  const chipY = textY + 435 + layoutVariant * 12;
+  const stageYOffset = layoutVariant * 14;
+  const stageScale = layoutVariant === 2 ? 0.97 : 1;
 
   context.fillStyle = theme.accent;
   context.beginPath();
-  context.roundRect(textX, safeY + safeH * 0.05, safeW * 0.24, 58, 29);
+  context.roundRect(textX, safeY + safeH * 0.05, safeW * (layoutVariant === 1 ? 0.28 : 0.24), 58, 29);
   context.fill();
 
   context.fillStyle = "#ffffff";
@@ -473,7 +511,6 @@ async function renderAsoFrame(
 
   chips.forEach((chip, index) => {
     const chipX = textX + index * (safeW * 0.24);
-    const chipY = textY + 435;
     context.fillStyle = "rgba(255,255,255,0.2)";
     context.beginPath();
     context.roundRect(chipX, chipY, safeW * 0.22, 48, 24);
@@ -484,9 +521,9 @@ async function renderAsoFrame(
   });
 
   const stageX = safeX + safeW * 0.08;
-  const stageY = safeY + safeH * 0.5;
-  const stageW = safeW * 0.84;
-  const stageH = safeH * 0.39;
+  const stageY = safeY + safeH * 0.5 + stageYOffset;
+  const stageW = safeW * 0.84 * stageScale;
+  const stageH = safeH * 0.39 * stageScale;
 
   context.fillStyle = "rgba(15,23,42,0.14)";
   context.beginPath();
@@ -537,14 +574,22 @@ export function StudioClient() {
   const [provider, setProvider] = useState<AIProvider>("openai");
   const [apiKey, setApiKey] = useState("");
   const [isGeneratingIcon, setIsGeneratingIcon] = useState(false);
+  const [isRenderingSet, setIsRenderingSet] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [statusTone, setStatusTone] = useState<StatusTone>("info");
+  const [isExporting, setIsExporting] = useState(false);
   const [iconSrc, setIconSrc] = useState("");
   const [mockups, setMockups] = useState<MockupVariant[]>([]);
+  const [slideFrames, setSlideFrames] = useState<EditableAsoFrame[]>([]);
+  const [editingFrameId, setEditingFrameId] = useState<string | null>(null);
+  const [regeneratingFrameId, setRegeneratingFrameId] = useState<string | null>(null);
   const [uploadedScreenshots, setUploadedScreenshots] = useState<UploadedScreenshot[]>([]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const renderSequenceRef = useRef(0);
 
   const brand = useMemo(() => deriveBrandSuggestion(form), [form]);
-  const narrative = useMemo(() => generateAsoNarrative(form), [form]);
+  const recommendedFrames = useMemo(() => createEditableAsoNarrative(form), [form]);
+  const activeFrames = slideFrames.length > 0 ? slideFrames : recommendedFrames;
   const usingRealUi = uploadedScreenshots.length > 0;
 
   useEffect(() => {
@@ -568,52 +613,24 @@ export function StudioClient() {
   const canGenerateIcon = form.prompt.trim().length > 0;
   const canGenerateScreenshots = usingRealUi || Boolean(iconSrc);
 
-  const handleGenerateIcon = async () => {
-    if (!canGenerateIcon) {
-      setStatusMessage("Enter an app idea prompt first.");
-      return;
-    }
-
-    setIsGeneratingIcon(true);
-    setStatusMessage("");
-
-    try {
-      const result = await generateIconWithProvider(form, { provider, apiKey });
-      if (result.imageDataUrl) setIconSrc(result.imageDataUrl);
-      else if (result.imageUrl) setIconSrc(result.imageUrl);
-      setStatusMessage(result.message ?? "Icon generation completed.");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unexpected generation error.";
-      setStatusMessage(message);
-    } finally {
-      setIsGeneratingIcon(false);
-    }
+  const updateStatus = (tone: StatusTone, message: string) => {
+    setStatusTone(tone);
+    updateStatus("error", message);
   };
 
-  const handleUploadScreenshots = async (event: ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) {
-      return;
+  const renderFrameSet = async (frames: EditableAsoFrame[], indices?: number[]) => {
+    if (!canvasRef.current) {
+      throw new Error("Canvas not ready for screenshot rendering.");
     }
 
-    try {
-      const items = await filesToDataUrls(files);
-      setUploadedScreenshots(items);
-      setStatusMessage(`Loaded ${items.length} real app screenshots for ASO composition.`);
-    } catch {
-      setStatusMessage("Failed to read one or more screenshots.");
-    }
-  };
+    const sequence = ++renderSequenceRef.current;
+    const rendered: MockupVariant[] = [];
+    const targets = indices ?? frames.map((_, index) => index);
 
-  const handleGenerateMockups = async () => {
-    if (!canvasRef.current || !canGenerateScreenshots) {
-      setStatusMessage("Upload screenshots for real-UI mode, or generate an icon to use fallback mode.");
-      return;
-    }
+    for (const index of targets) {
+      const frame = frames[index];
+      if (!frame) continue;
 
-    const variants: MockupVariant[] = [];
-
-    for (const [index, frame] of narrative.entries()) {
       const source = uploadedScreenshots[index % Math.max(uploadedScreenshots.length, 1)]?.dataUrl;
 
       for (const device of ["iphone", "ipad"] as const) {
@@ -626,7 +643,7 @@ export function StudioClient() {
           device
         });
 
-        variants.push({
+        rendered.push({
           id: `${frame.id}-${device}`,
           device,
           template: frame.id,
@@ -636,113 +653,248 @@ export function StudioClient() {
       }
     }
 
-    setMockups(variants);
-    setStatusMessage(
-      usingRealUi
-        ? "Generated 6-frame ASO screenshot story with your uploaded UI for iPhone and iPad."
-        : "Generated 6-frame ASO screenshot story in fallback mode using the icon concept."
+    if (sequence !== renderSequenceRef.current) {
+      return;
+    }
+
+    setMockups((current) =>
+      sortMockups(indices ? mergeMockups(current, rendered) : rendered)
     );
   };
 
+  const handleGenerateIcon = async () => {
+    if (!canGenerateIcon) {
+      updateStatus("error", "Enter an app idea prompt first.");
+      return;
+    }
+
+    setIsGeneratingIcon(true);
+    updateStatus("info", "Working…");
+
+    try {
+      const result = await generateIconWithProvider(form, { provider, apiKey });
+      if (result.imageDataUrl) setIconSrc(result.imageDataUrl);
+      else if (result.imageUrl) setIconSrc(result.imageUrl);
+      updateStatus("success", result.message ?? "Icon generation completed.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unexpected generation error.";
+      updateStatus("error", message);
+    } finally {
+      setIsGeneratingIcon(false);
+    }
+  };
+
+  const handleUploadScreenshots = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    const allowed = ["image/png", "image/jpeg", "image/webp"];
+    const list = Array.from(files);
+    const invalid = list.find((file) => !allowed.includes(file.type));
+    if (invalid) {
+      updateStatus("error", `Unsupported file type: ${invalid.name}. Use PNG, JPEG, or WEBP.`);
+      return;
+    }
+
+    const oversized = list.find((file) => file.size > 8 * 1024 * 1024);
+    if (oversized) {
+      updateStatus("error", `File too large: ${oversized.name}. Keep each screenshot under 8MB.`);
+      return;
+    }
+
+    try {
+      const items = await filesToDataUrls(files);
+      setUploadedScreenshots(items);
+      updateStatus("success", `Loaded ${items.length} real app screenshots for ASO composition.`);
+    } catch {
+      updateStatus("error", "Failed to read one or more screenshots.");
+    }
+  };
+
+  const handleGenerateMockups = async () => {
+    if (!canvasRef.current || !canGenerateScreenshots) {
+      setStatusMessage("Upload screenshots for real-UI mode, or generate an icon to use fallback mode.");
+      return;
+    }
+
+    const nextFrames = createEditableAsoNarrative(form);
+    setIsRenderingSet(true);
+    setSlideFrames(nextFrames);
+
+    try {
+      await renderFrameSet(nextFrames);
+      setStatusMessage(
+        usingRealUi
+          ? "Generated 6-frame ASO screenshot story with your uploaded UI for iPhone and iPad."
+          : "Generated 6-frame ASO screenshot story in fallback mode using the icon concept."
+      );
+    } finally {
+      setIsRenderingSet(false);
+    }
+  };
+
+  const handleUpdateFrameCopy = async (
+    frameId: EditableAsoFrame["id"],
+    field: "headline" | "subtext",
+    value: string
+  ) => {
+    const index = slideFrames.findIndex((frame) => frame.id === frameId);
+    if (index === -1) {
+      return;
+    }
+
+    const nextFrames = slideFrames.map((frame) =>
+      frame.id === frameId ? { ...frame, [field]: value } : frame
+    );
+
+    setSlideFrames(nextFrames);
+    await renderFrameSet(nextFrames, [index]);
+  };
+
+  const handleRegenerateFrame = async (frameId: EditableAsoFrame["id"]) => {
+    const index = slideFrames.findIndex((frame) => frame.id === frameId);
+    if (index === -1) {
+      return;
+    }
+
+    setRegeneratingFrameId(frameId);
+
+    try {
+      const nextFrame = regenerateAsoFrame(form, frameId, slideFrames[index].variant);
+      const nextFrames = slideFrames.map((frame) => (frame.id === frameId ? nextFrame : frame));
+      setSlideFrames(nextFrames);
+      await renderFrameSet(nextFrames, [index]);
+      setStatusMessage(`Regenerated ${nextFrame.label} using the current brief, tone, and strategy.`);
+    } finally {
+      setRegeneratingFrameId(null);
+    }
+  };
+
   const handleExportIcons = async () => {
-    if (!iconSrc.startsWith("data:image")) {
-      setStatusMessage("Icon ZIP export currently requires a generated or pasted data URL image.");
+    const readiness = canExportIcons(iconSrc);
+    if (!readiness.ok) {
+      updateStatus("error", readiness.reason ?? "Icon export is not ready yet.");
       return;
     }
 
-    const response = await fetch("/api/export-icons", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imageDataUrl: iconSrc })
-    });
+    setIsExporting(true);
+    updateStatus("info", "Preparing icon ZIP…");
+    try {
+      const response = await fetch("/api/export-icons", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageDataUrl: iconSrc })
+      });
 
-    if (!response.ok) {
-      setStatusMessage("Failed to create icon ZIP.");
-      return;
+      if (!response.ok) throw new Error("Failed to create icon ZIP.");
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      downloadUrl(url, "appbrandkit-icons.zip");
+      URL.revokeObjectURL(url);
+      updateStatus("success", "Icon ZIP exported.");
+    } catch (error) {
+      updateStatus("error", error instanceof Error ? error.message : "Failed to create icon ZIP.");
+    } finally {
+      setIsExporting(false);
     }
-
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    downloadUrl(url, "appbrandkit-icons.zip");
-    URL.revokeObjectURL(url);
-    setStatusMessage("Icon ZIP exported.");
   };
 
   const handleExportScreenshotsZip = async () => {
-    if (mockups.length === 0) {
-      setStatusMessage("Generate screenshots first, then export ZIP.");
+    const readiness = canExportScreenshots(mockups.length);
+    if (!readiness.ok) {
+      updateStatus("error", readiness.reason ?? "Screenshot export is not ready yet.");
       return;
     }
 
-    const JSZip = (await import("jszip")).default;
-    const zip = new JSZip();
-    for (const shot of mockups) {
-      const blob = dataUrlToBlob(shot.dataUrl);
-      zip.file(`screenshots/${shot.device}/${shot.id}.png`, blob);
-    }
+    setIsExporting(true);
+    updateStatus("info", "Preparing screenshots ZIP…");
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+      for (const shot of mockups) {
+        const blob = dataUrlToBlob(shot.dataUrl);
+        zip.file(`screenshots/${shot.device}/${shot.id}.png`, blob);
+      }
 
-    const archive = await zip.generateAsync({ type: "blob" });
-    const url = URL.createObjectURL(archive);
-    downloadUrl(url, "appbrandkit-screenshots.zip");
-    URL.revokeObjectURL(url);
-    setStatusMessage(`Exported ${mockups.length} screenshots as ZIP.`);
+      const archive = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(archive);
+      downloadUrl(url, "appbrandkit-screenshots.zip");
+      URL.revokeObjectURL(url);
+      updateStatus("success", `Exported ${mockups.length} screenshots as ZIP.`);
+    } catch {
+      updateStatus("error", "Failed to export screenshots ZIP.");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleExportAllZip = async () => {
-    if (!iconSrc && mockups.length === 0) {
-      setStatusMessage("Nothing to export yet. Generate icon and/or screenshots first.");
+    const readiness = canExportBundle(iconSrc, mockups.length);
+    if (!readiness.ok) {
+      updateStatus("error", readiness.reason ?? "Bundle export is not ready yet.");
       return;
     }
 
-    const JSZip = (await import("jszip")).default;
-    const zip = new JSZip();
+    setIsExporting(true);
+    updateStatus("info", "Preparing full bundle ZIP…");
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
 
-    if (iconSrc) {
-      try {
-        const iconBlob = await srcToBlob(iconSrc);
-        zip.file("preview/icon.png", iconBlob);
-      } catch {
-        // ignore icon preview fetch failures
-      }
+      if (iconSrc) {
+        try {
+          const iconBlob = await srcToBlob(iconSrc);
+          zip.file("preview/icon.png", iconBlob);
+        } catch {
+          // ignore icon preview fetch failures
+        }
 
-      if (iconSrc.startsWith("data:image")) {
-        const response = await fetch("/api/export-icons", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageDataUrl: iconSrc })
-        });
-        if (response.ok) {
-          const iconZipBlob = await response.blob();
-          zip.file("ios-icon-set/appbrandkit-icons.zip", iconZipBlob);
+        if (iconSrc.startsWith("data:image")) {
+          const response = await fetch("/api/export-icons", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageDataUrl: iconSrc })
+          });
+          if (response.ok) {
+            const iconZipBlob = await response.blob();
+            zip.file("ios-icon-set/appbrandkit-icons.zip", iconZipBlob);
+          }
         }
       }
+
+      for (const shot of mockups) {
+        zip.file(`screenshots/${shot.device}/${shot.id}.png`, dataUrlToBlob(shot.dataUrl));
+      }
+
+      const readme = [
+        "AppBrandKit export bundle",
+        "",
+        `Generated at: ${new Date().toISOString()}`,
+        `Screenshots: ${mockups.length}`,
+        `Icon included: ${iconSrc ? "yes" : "no"}`,
+        "",
+        "Contents:",
+        "- preview/icon.png (if available)",
+        "- ios-icon-set/appbrandkit-icons.zip (if icon was data-url generated)",
+        "- screenshots/iphone/*.png",
+        "- screenshots/ipad/*.png"
+      ].join("\n");
+
+      zip.file("README.txt", readme);
+
+      const archive = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(archive);
+      downloadUrl(url, "appbrandkit-export-bundle.zip");
+      URL.revokeObjectURL(url);
+      updateStatus("success", "Exported full bundle ZIP (icons + screenshots).");
+    } catch {
+      updateStatus("error", "Failed to export full bundle ZIP.");
+    } finally {
+      setIsExporting(false);
     }
-
-    for (const shot of mockups) {
-      zip.file(`screenshots/${shot.device}/${shot.id}.png`, dataUrlToBlob(shot.dataUrl));
-    }
-
-    const readme = [
-      "AppBrandKit export bundle",
-      "",
-      `Generated at: ${new Date().toISOString()}`,
-      `Screenshots: ${mockups.length}`,
-      `Icon included: ${iconSrc ? "yes" : "no"}`,
-      "",
-      "Contents:",
-      "- preview/icon.png (if available)",
-      "- ios-icon-set/appbrandkit-icons.zip (if icon was data-url generated)",
-      "- screenshots/iphone/*.png",
-      "- screenshots/ipad/*.png"
-    ].join("\n");
-
-    zip.file("README.txt", readme);
-
-    const archive = await zip.generateAsync({ type: "blob" });
-    const url = URL.createObjectURL(archive);
-    downloadUrl(url, "appbrandkit-export-bundle.zip");
-    URL.revokeObjectURL(url);
-    setStatusMessage("Exported full bundle ZIP (icons + screenshots). ");
   };
 
   return (
@@ -757,9 +909,10 @@ export function StudioClient() {
               control costs, and export iPhone/iPad visuals in one flow.
             </p>
           </div>
-          <Link href="/" className="btn-ghost text-center">
-            Back to landing
-          </Link>
+          <div className="flex gap-2">
+            <Link href="/help" className="btn-ghost text-center">Help</Link>
+            <Link href="/" className="btn-ghost text-center">Back to landing</Link>
+          </div>
         </div>
       </header>
 
@@ -966,6 +1119,18 @@ export function StudioClient() {
               />
             </label>
 
+            <button
+              className="btn-ghost mt-2 px-4 py-2"
+              onClick={() => {
+                window.localStorage.removeItem(localStorageKey);
+                setApiKey("");
+                updateStatus("success", "Cleared local BYOK cache.");
+              }}
+              type="button"
+            >
+              Clear local BYOK cache
+            </button>
+
             <div className="rounded-3xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
               Legal notice: review generated outputs before shipping. Avoid trademarked logos, copyrighted characters,
               brand lookalikes, or misleading performance claims.
@@ -992,15 +1157,15 @@ export function StudioClient() {
             </button>
             <button
               className="btn-ghost disabled:opacity-50"
-              disabled={!canGenerateScreenshots}
+              disabled={!canGenerateScreenshots || isRenderingSet}
               onClick={handleGenerateMockups}
               type="button"
             >
-              Generate screenshot set
+              {isRenderingSet ? "Rendering screenshot set..." : "Generate screenshot set"}
             </button>
             <button
               className="btn-ghost disabled:opacity-50"
-              disabled={!iconSrc}
+              disabled={!iconSrc || isExporting}
               onClick={handleExportIcons}
               type="button"
             >
@@ -1008,7 +1173,7 @@ export function StudioClient() {
             </button>
             <button
               className="btn-ghost disabled:opacity-50"
-              disabled={mockups.length === 0}
+              disabled={mockups.length === 0 || isExporting}
               onClick={handleExportScreenshotsZip}
               type="button"
             >
@@ -1016,7 +1181,7 @@ export function StudioClient() {
             </button>
             <button
               className="btn-ghost disabled:opacity-50"
-              disabled={!iconSrc && mockups.length === 0}
+              disabled={(!iconSrc && mockups.length === 0) || isExporting}
               onClick={handleExportAllZip}
               type="button"
             >
@@ -1024,7 +1189,20 @@ export function StudioClient() {
             </button>
           </div>
 
-          {statusMessage ? <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm">{statusMessage}</p> : null}
+          {statusMessage ? (
+            <p
+              aria-live="polite"
+              className={`mt-4 rounded-2xl px-4 py-3 text-sm ${
+                statusTone === "error"
+                  ? "bg-red-50 text-red-800 border border-red-200"
+                  : statusTone === "success"
+                    ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                    : "bg-white"
+              }`}
+            >
+              {statusMessage}
+            </p>
+          ) : null}
 
           <div className="mt-6 surface rounded-[26px] p-5">
             <div className="flex items-center justify-between gap-4">
@@ -1042,7 +1220,7 @@ export function StudioClient() {
             <label className="mt-4 grid gap-2">
               <span className="text-sm font-medium">Upload screenshots</span>
               <input
-                accept="image/*"
+                accept="image/png,image/jpeg,image/webp"
                 className="input-shell rounded-2xl"
                 multiple
                 onChange={handleUploadScreenshots}
@@ -1123,7 +1301,7 @@ export function StudioClient() {
           <div className="mt-7">
             <h3 className="text-lg font-semibold tracking-tight">ASO narrative flow (6 frames)</h3>
             <div className="mt-4 grid gap-3">
-              {narrative.map((frame) => (
+              {activeFrames.map((frame) => (
                 <article key={frame.id} className="surface rounded-3xl p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--brand)]">{frame.label}</p>
                   <p className="mt-2 text-lg font-semibold tracking-tight">{frame.headline}</p>
@@ -1161,26 +1339,99 @@ export function StudioClient() {
               </div>
             </div>
 
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
-              {mockups.map((mockup) => (
-                <article key={mockup.id} className="surface rounded-[26px] p-4">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img alt={mockup.title} className="aspect-[3/4] w-full rounded-[20px] border border-[color:var(--line)] object-cover" src={mockup.dataUrl} />
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold capitalize">{mockup.title}</p>
-                      <p className="text-xs uppercase tracking-[0.12em] text-[color:var(--muted)]">{mockup.device}</p>
+            <div className="mt-6 grid gap-5">
+              {slideFrames.map((frame) => {
+                const iphoneMockup = mockups.find((mockup) => mockup.id === `${frame.id}-iphone`);
+                const ipadMockup = mockups.find((mockup) => mockup.id === `${frame.id}-ipad`);
+                const isEditing = editingFrameId === frame.id;
+                const isRegenerating = regeneratingFrameId === frame.id;
+
+                return (
+                  <article key={frame.id} className="surface rounded-[28px] p-4 md:p-5">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--brand)]">
+                          {frame.label}
+                        </p>
+                        <p className="mt-2 text-lg font-semibold tracking-tight">{frame.headline}</p>
+                        <p className="mt-2 max-w-3xl text-sm leading-6 text-[color:var(--muted)]">{frame.subtext}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          className="btn-ghost px-4 py-2"
+                          onClick={() => setEditingFrameId(isEditing ? null : frame.id)}
+                          type="button"
+                        >
+                          {isEditing ? "Close edit mode" : "Edit copy"}
+                        </button>
+                        <button
+                          className="btn-ghost px-4 py-2 disabled:opacity-50"
+                          disabled={isRegenerating}
+                          onClick={() => void handleRegenerateFrame(frame.id)}
+                          type="button"
+                        >
+                          {isRegenerating ? "Regenerating..." : "Regenerate slide"}
+                        </button>
+                      </div>
                     </div>
-                    <button
-                      className="btn-ghost px-4 py-2"
-                      onClick={() => downloadUrl(mockup.dataUrl, `${mockup.id}.png`)}
-                      type="button"
-                    >
-                      Export PNG
-                    </button>
-                  </div>
-                </article>
-              ))}
+
+                    {isEditing ? (
+                      <div className="mt-4 grid gap-4 rounded-[24px] border border-[color:var(--line)] bg-white/80 p-4 md:grid-cols-2">
+                        <label className="grid gap-2">
+                          <span className="text-sm font-medium">Headline</span>
+                          <input
+                            className="input-shell rounded-full"
+                            value={frame.headline}
+                            onChange={(event) => void handleUpdateFrameCopy(frame.id, "headline", event.target.value)}
+                          />
+                        </label>
+                        <label className="grid gap-2">
+                          <span className="text-sm font-medium">Subtext</span>
+                          <textarea
+                            className="input-shell min-h-28 rounded-3xl"
+                            value={frame.subtext}
+                            onChange={(event) => void handleUpdateFrameCopy(frame.id, "subtext", event.target.value)}
+                          />
+                        </label>
+                      </div>
+                    ) : null}
+
+                    <div className="mt-5 grid gap-4 md:grid-cols-2">
+                      {[iphoneMockup, ipadMockup]
+                        .filter((mockup): mockup is MockupVariant => Boolean(mockup))
+                        .map((mockup) => (
+                        <div key={mockup.id} className="rounded-[24px] border border-[color:var(--line)] bg-white p-3">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            alt={mockup.title}
+                            className="aspect-[3/4] w-full rounded-[20px] object-cover"
+                            src={mockup.dataUrl}
+                          />
+                          <div className="mt-4 flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold capitalize">{mockup.title}</p>
+                              <p className="text-xs uppercase tracking-[0.12em] text-[color:var(--muted)]">
+                                {mockup.device}
+                              </p>
+                            </div>
+                            <button
+                              className="btn-ghost px-4 py-2"
+                              onClick={() => downloadUrl(mockup.dataUrl, `${mockup.id}.png`)}
+                              type="button"
+                            >
+                              Export PNG
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-4 text-xs uppercase tracking-[0.14em] text-[color:var(--muted)]">
+                      Variant {frame.variant + 1} • edits update previews and exports immediately
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           </>
         ) : (
