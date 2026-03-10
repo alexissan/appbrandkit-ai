@@ -109,7 +109,7 @@ select {
 .btn-primary {
   border-radius: 999px;
   background: linear-gradient(135deg, var(--brand) 0%, var(--brand-strong) 100%);
-  border: 1px solid rgba(53, 92, 255, 0.48);
+  border: 1px solid rgba(31, 60, 203, 0.8);
   color: white;
   padding: 12px 18px;
   font-size: 0.92rem;
@@ -117,14 +117,29 @@ select {
   box-shadow: 0 12px 28px rgba(53, 92, 255, 0.28);
 }
 
+.btn-primary:hover {
+  filter: brightness(1.02);
+}
+
 .btn-ghost {
   border-radius: 999px;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.9);
-  color: var(--foreground);
+  border: 1px solid rgba(16, 24, 42, 0.2);
+  background: rgba(255, 255, 255, 0.95);
+  color: #0b1220;
   padding: 12px 18px;
   font-size: 0.92rem;
-  font-weight: 650;
+  font-weight: 700;
+}
+
+.btn-ghost:hover {
+  background: #ffffff;
+}
+
+.btn-primary:focus-visible,
+.btn-ghost:focus-visible,
+.input-shell:focus-visible {
+  outline: 3px solid rgba(53, 92, 255, 0.35);
+  outline-offset: 2px;
 }
 
 .grid-auto {

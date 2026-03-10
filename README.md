@@ -51,6 +51,7 @@ This runs `scripts/dev-with-keychain.sh`, which reads the key from Keychain, exp
 - `npm run build`
 - `npm run start`
 - `npm run lint`
+- `npm test` (smoke tests for narrative + export preconditions)
 
 ## Key handling model
 
@@ -88,6 +89,7 @@ This runs `scripts/dev-with-keychain.sh`, which reads the key from Keychain, exp
 
 - Landing page at `/`
 - Studio at `/studio`
+- Help center at `/help` (quick start, trust/safety, troubleshooting, FAQ)
 - Provider abstraction with OpenAI, Gemini, and Anthropic options
 - Real OpenAI image generation path for app icon concepts
 - Local brand palette and marketing copy suggestions derived heuristically from the prompt
@@ -103,6 +105,14 @@ This runs `scripts/dev-with-keychain.sh`, which reads the key from Keychain, exp
 - Persistent project history
 - Auth, teams, hosted key management, and production-safe secret handling
 - Rich editing controls for template text/layout
+
+## Troubleshooting
+
+- Icon ZIP requires a generated data URL icon.
+- Screenshots ZIP requires generated screenshot frames.
+- Full bundle requires at least one generated artifact (icon or screenshots).
+- If BYOK state is stale, clear local BYOK cache in Studio and refresh.
+- Uploads accept PNG/JPEG/WEBP (up to 8MB each).
 
 ## Notes
 

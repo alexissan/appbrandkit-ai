@@ -70,9 +70,10 @@ export default function HomePage() {
       <header className="glass overflow-hidden rounded-[36px] p-6 md:p-10">
         <nav className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div className="pill text-sm font-medium">AppBrandKit AI</div>
-          <div className="flex items-center gap-3 text-sm">
+          <div className="flex flex-wrap items-center gap-3 text-sm">
             <a className="text-[color:var(--muted)]" href="#examples">Examples</a>
             <a className="text-[color:var(--muted)]" href="#how-it-works">Workflow</a>
+            <Link className="text-[color:var(--muted)]" href="/help">Help</Link>
             <Link className="btn-primary" href="/studio">Open Studio</Link>
           </div>
         </nav>
