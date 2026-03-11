@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createEditableAsoNarrative, parseFeatures, regenerateAsoFrame } from "@/lib/aso";
 import { deriveBrandSuggestion } from "@/lib/branding";
 import { canExportBundle, canExportIcons, canExportScreenshots } from "@/lib/export";
+import { loadProjects, upsertProject } from "@/lib/projects";
 import { generateIconWithProvider } from "@/lib/providers";
 import type {
   AIProvider,
@@ -12,6 +13,7 @@ import type {
   EditableAsoFrame,
   IconStylePreset,
   MockupVariant,
+  Project,
   ProviderConfig,
   ScreenshotStrategy,
   ScreenshotTone,
@@ -63,6 +65,8 @@ const screenshotStrategyLabels: Record<ScreenshotStrategy, string> = {
 };
 
 const localStorageKey = "appbrandkit-byok";
+const projectSaveDelayMs = 500;
+const untitledProjectName = "Untitled project";
 
 const defaultForm: StudioForm = {
   prompt: "",
@@ -111,6 +115,51 @@ const starterPrompts = [
 
 const iphoneSize = { width: 1290, height: 2796 };
 const ipadSize = { width: 2064, height: 2752 };
+
+function createProjectId() {
+  return globalThis.crypto?.randomUUID?.() ?? `project-${Date.now()}`;
+}
+
+function compactProjectName(value: string, maxLength = 36) {
+  const compact = value.replace(/\s+/g, " ").trim();
+  if (!compact) return untitledProjectName;
+  if (compact.length <= maxLength) return compact;
+  return `${compact.slice(0, maxLength - 1).trim()}…`;
+}
+
+function deriveProjectName(form: StudioForm, fallback = untitledProjectName) {
+  if (form.appName.trim()) return compactProjectName(form.appName);
+  if (form.prompt.trim()) return compactProjectName(form.prompt);
+  return fallback;
+}
+
+function serializeProjectState(project: Pick<Project, "form" | "iconSrc" | "mockups" | "slideFrames" | "provider" | "name">) {
+  return JSON.stringify(project);
+}
+
+function createProject(options: {
+  provider: AIProvider;
+  form?: StudioForm;
+  iconSrc?: string | null;
+  mockups?: MockupVariant[];
+  slideFrames?: EditableAsoFrame[];
+  name?: string;
+}): Project {
+  const now = new Date().toISOString();
+  const form = options.form ?? defaultForm;
+
+  return {
+    id: createProjectId(),
+    name: options.name ?? deriveProjectName(form),
+    createdAt: now,
+    updatedAt: now,
+    form,
+    iconSrc: options.iconSrc ?? null,
+    mockups: options.mockups ?? [],
+    slideFrames: options.slideFrames ?? [],
+    provider: options.provider
+  };
+}
 
 function dataUrlToBlob(dataUrl: string): Blob {
   const [header, base64] = dataUrl.split(",");
@@ -573,6 +622,8 @@ export function StudioClient() {
   const [form, setForm] = useState<StudioForm>(defaultForm);
   const [provider, setProvider] = useState<AIProvider>("openai");
   const [apiKey, setApiKey] = useState("");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [isGeneratingIcon, setIsGeneratingIcon] = useState(false);
   const [isRenderingSet, setIsRenderingSet] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
@@ -586,11 +637,19 @@ export function StudioClient() {
   const [uploadedScreenshots, setUploadedScreenshots] = useState<UploadedScreenshot[]>([]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const renderSequenceRef = useRef(0);
+  const hasHydratedProjectsRef = useRef(false);
+  const lastSavedProjectStateRef = useRef("");
 
   const brand = useMemo(() => deriveBrandSuggestion(form), [form]);
   const recommendedFrames = useMemo(() => createEditableAsoNarrative(form), [form]);
   const activeFrames = slideFrames.length > 0 ? slideFrames : recommendedFrames;
   const usingRealUi = uploadedScreenshots.length > 0;
+  const currentProject = useMemo(
+    () => projects.find((project) => project.id === currentProjectId) ?? null,
+    [currentProjectId, projects]
+  );
+  const hasMeaningfulProjectState =
+    form.prompt.trim().length > 0 || Boolean(iconSrc) || mockups.length > 0 || slideFrames.length > 0;
 
   useEffect(() => {
     const raw = window.localStorage.getItem(localStorageKey);
@@ -610,12 +669,132 @@ export function StudioClient() {
     window.localStorage.setItem(localStorageKey, JSON.stringify(payload));
   }, [provider, apiKey]);
 
+  useEffect(() => {
+    const storedProjects = loadProjects();
+    setProjects(storedProjects);
+
+    const mostRecentProject = storedProjects[0];
+    if (mostRecentProject) {
+      setCurrentProjectId(mostRecentProject.id);
+      setForm(mostRecentProject.form);
+      setIconSrc(mostRecentProject.iconSrc ?? "");
+      setMockups(mostRecentProject.mockups);
+      setSlideFrames(mostRecentProject.slideFrames);
+      setProvider(mostRecentProject.provider);
+      lastSavedProjectStateRef.current = serializeProjectState(mostRecentProject);
+    }
+
+    hasHydratedProjectsRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydratedProjectsRef.current || currentProjectId || !hasMeaningfulProjectState) {
+      return;
+    }
+
+    const nextProject = createProject({
+      provider,
+      form,
+      iconSrc: iconSrc || null,
+      mockups,
+      slideFrames,
+      name: deriveProjectName(form)
+    });
+
+    setProjects(upsertProject(nextProject));
+    setCurrentProjectId(nextProject.id);
+    lastSavedProjectStateRef.current = serializeProjectState(nextProject);
+  }, [currentProjectId, form, hasMeaningfulProjectState, iconSrc, mockups, provider, slideFrames]);
+
+  useEffect(() => {
+    if (!hasHydratedProjectsRef.current || !currentProjectId || !currentProject) {
+      return;
+    }
+
+    const nextProject: Project = {
+      id: currentProject.id,
+      name: currentProject.name,
+      createdAt: currentProject.createdAt,
+      updatedAt: currentProject.updatedAt,
+      form,
+      iconSrc: iconSrc || null,
+      mockups,
+      slideFrames,
+      provider
+    };
+    const serializedProjectState = serializeProjectState(nextProject);
+    if (serializedProjectState === lastSavedProjectStateRef.current) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const updatedProjects = upsertProject(nextProject);
+      const savedProject = updatedProjects.find((project) => project.id === nextProject.id) ?? nextProject;
+      setProjects(updatedProjects);
+      lastSavedProjectStateRef.current = serializeProjectState(savedProject);
+    }, projectSaveDelayMs);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [currentProject, currentProjectId, form, iconSrc, mockups, provider, slideFrames]);
+
   const canGenerateIcon = form.prompt.trim().length > 0;
   const canGenerateScreenshots = usingRealUi || Boolean(iconSrc);
 
   const updateStatus = (tone: StatusTone, message: string) => {
     setStatusTone(tone);
-    updateStatus("error", message);
+    setStatusMessage(message);
+  };
+
+  const applyProject = (project: Project) => {
+    setCurrentProjectId(project.id);
+    setForm(project.form);
+    setIconSrc(project.iconSrc ?? "");
+    setMockups(project.mockups);
+    setSlideFrames(project.slideFrames);
+    setProvider(project.provider);
+    setEditingFrameId(null);
+    setRegeneratingFrameId(null);
+    setUploadedScreenshots([]);
+    lastSavedProjectStateRef.current = serializeProjectState(project);
+  };
+
+  const handleSelectProject = (projectId: string) => {
+    const nextProject = projects.find((project) => project.id === projectId);
+    if (!nextProject) return;
+    applyProject(nextProject);
+    updateStatus("success", `Opened ${nextProject.name}.`);
+  };
+
+  const handleCreateNewProject = () => {
+    const nextProject = createProject({
+      provider,
+      form: defaultForm,
+      iconSrc: null,
+      mockups: [],
+      slideFrames: [],
+      name: untitledProjectName
+    });
+
+    setProjects(upsertProject(nextProject));
+    applyProject(nextProject);
+    updateStatus("success", "Started a new project.");
+  };
+
+  const handleDuplicateProject = () => {
+    if (!currentProject) return;
+
+    const nextProject = createProject({
+      provider,
+      form,
+      iconSrc: iconSrc || null,
+      mockups,
+      slideFrames,
+      name: `${currentProject.name} Copy`
+    });
+
+    setProjects(upsertProject(nextProject));
+    applyProject(nextProject);
+    updateStatus("success", `Duplicated ${currentProject.name}.`);
   };
 
   const renderFrameSet = async (frames: EditableAsoFrame[], indices?: number[]) => {
@@ -909,9 +1088,45 @@ export function StudioClient() {
               control costs, and export iPhone/iPad visuals in one flow.
             </p>
           </div>
-          <div className="flex gap-2">
-            <Link href="/help" className="btn-ghost text-center">Help</Link>
-            <Link href="/" className="btn-ghost text-center">Back to landing</Link>
+          <div className="flex w-full max-w-md flex-col gap-3 md:w-auto">
+            <div className="surface rounded-[28px] p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--muted)]">Project</p>
+              <div className="mt-2 rounded-full bg-white px-4 py-2 text-sm font-semibold">
+                {currentProject?.name ?? "No project yet"}
+              </div>
+              <select
+                className="input-shell mt-3 w-full rounded-full"
+                onChange={(event) => handleSelectProject(event.target.value)}
+                value={currentProjectId ?? ""}
+              >
+                <option disabled value="">
+                  {projects.length > 0 ? "Select a recent project" : "No saved projects yet"}
+                </option>
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+              <div className="mt-3 flex gap-2">
+                <button className="btn-primary px-4 py-2 text-sm" onClick={handleCreateNewProject} type="button">
+                  New project
+                </button>
+                <button
+                  className="btn-ghost px-4 py-2 text-sm disabled:opacity-50"
+                  disabled={!currentProject}
+                  onClick={handleDuplicateProject}
+                  type="button"
+                >
+                  Duplicate
+                </button>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Link href="/help" className="btn-ghost flex-1 text-center">Help</Link>
+              <Link href="/" className="btn-ghost flex-1 text-center">Back to landing</Link>
+            </div>
           </div>
         </div>
       </header>

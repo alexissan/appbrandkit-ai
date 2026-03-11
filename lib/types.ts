@@ -75,3 +75,15 @@ export type MockupVariant = {
   title: string;
   dataUrl: string;
 };
+
+export type Project = {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  form: StudioForm;
+  iconSrc: string | null;
+  mockups: MockupVariant[];
+  slideFrames: EditableAsoFrame[];
+  provider: AIProvider;
+};

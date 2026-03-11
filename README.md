@@ -58,6 +58,7 @@ This runs `scripts/dev-with-keychain.sh`, which reads the key from Keychain, exp
 - Server-side `OPENAI_API_KEY` is preferred automatically when present.
 - BYOK key input remains available but optional, and is only used when no server key exists.
 - BYOK provider/key preferences are still stored in `localStorage` for local MVP convenience.
+- Recent Studio projects are stored locally in `localStorage` (up to 8), without persisting API keys.
 
 ## Screenshots
 
@@ -84,6 +85,7 @@ This runs `scripts/dev-with-keychain.sh`, which reads the key from Keychain, exp
 - **Screenshots:** upgraded App Store-style renderer with cleaner hierarchy, stronger headline/supporting copy, gradient cards, safe framing, icon badge, and feature chips.
 - **Templates:** 6 screenshot templates (each exported for iPhone + iPad).
 - **Studio UX:** screenshot tone control (Minimal, Vibrant, Premium) and listing-like preview strip.
+- **Project history:** lightweight recent-project system in Studio with create, switch, duplicate, and resume.
 
 ## What Works Now
 
@@ -97,12 +99,12 @@ This runs `scripts/dev-with-keychain.sh`, which reads the key from Keychain, exp
 - PNG export for generated icon and screenshot mockups
 - iOS icon ZIP export containing common app icon sizes
 - Legal, trademark, and safety disclaimers in the UI
+- Client-side recent project persistence for Studio sessions
 
 ## Stubbed / Not Yet Implemented
 
 - Gemini image generation
 - Anthropic image generation
-- Persistent project history
 - Auth, teams, hosted key management, and production-safe secret handling
 - Rich editing controls for template text/layout
 
