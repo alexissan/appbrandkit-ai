@@ -73,6 +73,7 @@ export default function HomePage() {
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <a className="text-[color:var(--muted)]" href="#examples">Examples</a>
             <a className="text-[color:var(--muted)]" href="#how-it-works">Workflow</a>
+            <Link className="text-[color:var(--muted)]" href="/projects">Projects</Link>
             <Link className="text-[color:var(--muted)]" href="/help">Help</Link>
             <Link className="btn-primary" href="/studio">Open Studio</Link>
           </div>

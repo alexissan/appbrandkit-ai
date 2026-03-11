@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { createEditableAsoNarrative, parseFeatures, regenerateAsoFrame } from "@/lib/aso";
 import { deriveBrandSuggestion } from "@/lib/branding";
@@ -648,6 +649,7 @@ export function StudioClient() {
   const [regeneratingFrameId, setRegeneratingFrameId] = useState<string | null>(null);
   const [uploadedScreenshots, setUploadedScreenshots] = useState<UploadedScreenshot[]>([]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const searchParams = useSearchParams();
   const renderSequenceRef = useRef(0);
   const hasHydratedProjectsRef = useRef(false);
   const lastSavedProjectStateRef = useRef("");
@@ -685,19 +687,23 @@ export function StudioClient() {
     const storedProjects = loadProjects();
     setProjects(storedProjects);
 
+    const requestedProjectId = searchParams.get("project");
+    const requestedProject = storedProjects.find((project) => project.id === requestedProjectId);
     const mostRecentProject = storedProjects[0];
-    if (mostRecentProject) {
-      setCurrentProjectId(mostRecentProject.id);
-      setForm(mostRecentProject.form);
-      setIconSrc(mostRecentProject.iconSrc ?? "");
-      setMockups(mostRecentProject.mockups);
-      setSlideFrames(mostRecentProject.slideFrames);
-      setProvider(mostRecentProject.provider);
-      lastSavedProjectStateRef.current = serializeProjectState(mostRecentProject);
+    const initialProject = requestedProject ?? mostRecentProject;
+
+    if (initialProject) {
+      setCurrentProjectId(initialProject.id);
+      setForm(initialProject.form);
+      setIconSrc(initialProject.iconSrc ?? "");
+      setMockups(initialProject.mockups);
+      setSlideFrames(initialProject.slideFrames);
+      setProvider(initialProject.provider);
+      lastSavedProjectStateRef.current = serializeProjectState(initialProject);
     }
 
     hasHydratedProjectsRef.current = true;
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     if (!hasHydratedProjectsRef.current || currentProjectId || !hasMeaningfulProjectState) {
