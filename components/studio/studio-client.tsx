@@ -116,6 +116,18 @@ const starterPrompts = [
 const iphoneSize = { width: 1290, height: 2796 };
 const ipadSize = { width: 2064, height: 2752 };
 
+function formatUpdatedAt(iso: string) {
+  const then = new Date(iso).getTime();
+  const now = Date.now();
+  const minutes = Math.round((now - then) / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.round(hours / 24);
+  return `${days} d ago`;
+}
+
 function createProjectId() {
   return globalThis.crypto?.randomUUID?.() ?? `project-${Date.now()}`;
 }
@@ -1094,20 +1106,36 @@ export function StudioClient() {
               <div className="mt-2 rounded-full bg-white px-4 py-2 text-sm font-semibold">
                 {currentProject?.name ?? "No project yet"}
               </div>
-              <select
-                className="input-shell mt-3 w-full rounded-full"
-                onChange={(event) => handleSelectProject(event.target.value)}
-                value={currentProjectId ?? ""}
-              >
-                <option disabled value="">
-                  {projects.length > 0 ? "Select a recent project" : "No saved projects yet"}
-                </option>
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
+
+              <div className="mt-3 max-h-48 overflow-auto rounded-2xl border border-[color:var(--line)] bg-white/80">
+                {projects.length === 0 ? (
+                  <div className="px-4 py-3 text-xs text-[color:var(--muted)]">
+                    Projects are created automatically as you work. Start typing a brief or generating assets.
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-[color:var(--line)] text-sm">
+                    {projects.map((project) => (
+                      <li key={project.id}>
+                        <button
+                          className={`flex w-full items-center justify-between px-4 py-2 text-left hover:bg-slate-50 ${
+                            project.id === currentProjectId ? "bg-slate-50" : ""
+                          }`}
+                          onClick={() => handleSelectProject(project.id)}
+                          type="button"
+                        >
+                          <div className="flex flex-col">
+                            <span className="truncate font-medium">{project.name}</span>
+                            <span className="text-xs text-[color:var(--muted)]">
+                              Updated {formatUpdatedAt(project.updatedAt)}
+                            </span>
+                          </div>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
               <div className="mt-3 flex gap-2">
                 <button className="btn-primary px-4 py-2 text-sm" onClick={handleCreateNewProject} type="button">
                   New project
